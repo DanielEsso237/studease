@@ -30,13 +30,12 @@ class _LoginPageState extends State<LoginPage> {
     _controller.setVolume(0);
     _controller.play();
 
-    // Ecoute des changements pour activer/désactiver le bouton
     emailController.addListener(_updateState);
     passwordController.addListener(_updateState);
   }
 
   void _updateState() {
-    setState(() {}); // Redessine pour bouton actif/inactif
+    setState(() {});
   }
 
   @override
@@ -63,7 +62,6 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         isLoading = false;
       });
-      // Ici tu peux naviguer vers la page suivante
     });
   }
 
@@ -108,10 +106,11 @@ class _LoginPageState extends State<LoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        "Connexion à Studease",
+                        "Connexion à StudEase",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
+                          color: Color.fromRGBO(28, 81, 145, 100),
                         ),
                         textAlign: TextAlign.center,
                       ),

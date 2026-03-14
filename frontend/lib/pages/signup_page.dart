@@ -71,7 +71,6 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => isLoading = true);
     Future.delayed(const Duration(seconds: 2), () {
       setState(() => isLoading = false);
-      // Ici tu peux naviguer vers la page principale ou login
     });
   }
 
@@ -116,10 +115,11 @@ class _SignupPageState extends State<SignupPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        "Créer un compte Studease",
+                        "Créer un compte sur StudEase",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
+                          color: Color.fromRGBO(28, 81, 145, 100),
                         ),
                         textAlign: TextAlign.center,
                       ),

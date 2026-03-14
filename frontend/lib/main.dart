@@ -10,8 +10,6 @@ class StudEaseApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: const LoginPage(), // Page principale = LoginPage
-    );
+    return MaterialApp(home: const LoginPage());
   }
 }
