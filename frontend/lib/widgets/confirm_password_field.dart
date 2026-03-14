@@ -6,11 +6,11 @@ class ConfirmPasswordField extends StatelessWidget {
   final VoidCallback toggleObscure;
 
   const ConfirmPasswordField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.obscureText,
     required this.toggleObscure,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
