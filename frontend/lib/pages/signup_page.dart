@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/signup_page.dart';
 import 'package:video_player/video_player.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
 import '../widgets/login_button.dart';
 import '../widgets/google_login_button.dart';
+import '../widgets/confirm_password_field.dart';
+import '../widgets/full_name_field.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+class SignupPage extends StatefulWidget {
+  const SignupPage({Key? key}) : super(key: key);
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SignupPage> createState() => _SignupPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _SignupPageState extends State<SignupPage> {
   late VideoPlayerController _controller;
+  final fullNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+
   bool obscurePassword = true;
+  bool obscureConfirm = true;
   bool isLoading = false;
 
   @override
@@ -30,38 +35,42 @@ class _LoginPageState extends State<LoginPage> {
     _controller.setVolume(0);
     _controller.play();
 
+    fullNameController.addListener(_updateState);
     emailController.addListener(_updateState);
     passwordController.addListener(_updateState);
+    confirmPasswordController.addListener(_updateState);
   }
 
-  void _updateState() {
-    setState(() {});
-  }
+  void _updateState() => setState(() {});
 
   @override
   void dispose() {
     _controller.dispose();
+    fullNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
+    confirmPasswordController.dispose();
     super.dispose();
   }
 
   bool get _isFormValid {
+    final name = fullNameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text;
+    final confirm = confirmPasswordController.text;
+
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    return emailRegex.hasMatch(email) && password.length >= 6;
+
+    return name.isNotEmpty &&
+        emailRegex.hasMatch(email) &&
+        password.length >= 6 &&
+        password == confirm;
   }
 
-  void _onLoginPressed() {
-    setState(() {
-      isLoading = true;
-    });
-    // Simuler un délai
+  void _onSignupPressed() {
+    setState(() => isLoading = true);
     Future.delayed(const Duration(seconds: 2), () {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     });
   }
 
@@ -106,7 +115,7 @@ class _LoginPageState extends State<LoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        "Connexion à StudEase",
+                        "Créer un compte sur StudEase",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -115,23 +124,31 @@ class _LoginPageState extends State<LoginPage> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 25),
+                      FullNameField(controller: fullNameController),
+                      const SizedBox(height: 16),
                       EmailField(controller: emailController),
                       const SizedBox(height: 16),
                       PasswordField(
                         controller: passwordController,
                         obscureText: obscurePassword,
                         toggleObscure: () {
-                          setState(() {
-                            obscurePassword = !obscurePassword;
-                          });
+                          setState(() => obscurePassword = !obscurePassword);
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      ConfirmPasswordField(
+                        controller: confirmPasswordController,
+                        obscureText: obscureConfirm,
+                        toggleObscure: () {
+                          setState(() => obscureConfirm = !obscureConfirm);
                         },
                       ),
                       const SizedBox(height: 20),
                       isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : LoginButton(
-                              onPressed: _isFormValid ? _onLoginPressed : null,
-                              label: "Continuer",
+                              onPressed: _isFormValid ? _onSignupPressed : null,
+                              label: "Créer un compte",
                             ),
                       const SizedBox(height: 20),
                       Row(
@@ -149,24 +166,11 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text("Pas de compte ? "),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SignupPage(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              "Créer un compte",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
-                              ),
-                            ),
+                        children: const [
+                          Text("Déjà un compte ? "),
+                          Text(
+                            "Se connecter",
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
