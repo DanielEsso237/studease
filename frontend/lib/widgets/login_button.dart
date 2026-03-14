@@ -5,7 +5,7 @@ class LoginButton extends StatelessWidget {
   final String label;
 
   const LoginButton({Key? key, required this.onPressed, required this.label})
-    : super(key: key);
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {

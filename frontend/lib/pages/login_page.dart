@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/signup_page.dart';
 import 'package:video_player/video_player.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
@@ -17,6 +18,7 @@ class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool obscurePassword = true;
+  bool isLoading = false;
 
   bool get isFormValid =>
       emailController.text.trim().isNotEmpty &&
@@ -51,8 +53,22 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  void _onLoginPressed() {
+    setState(() {
+      isLoading = true;
+    });
+    // Simuler un délai
+    Future.delayed(const Duration(seconds: 2), () {
+      setState(() {
+        isLoading = false;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       backgroundColor: const Color(0xffF7F7F8),
       body: Center(
@@ -63,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: SizedBox(
-                    width: MediaQuery.of(context).size.width * 0.7,
+                    width: screenWidth * 0.7,
                     child: AspectRatio(
                       aspectRatio: _controller.value.aspectRatio,
                       child: VideoPlayer(_controller),
@@ -112,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
                     Opacity(
                       opacity: isFormValid ? 1.0 : 0.45,
                       child: LoginButton(
-                        onPressed: isFormValid ? () {} : null,
+                        onPressed: isFormValid ? _onLoginPressed : null,
                         label: "Continuer",
                       ),
                     ),
@@ -132,11 +148,24 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Text("Pas de compte ? "),
-                        Text(
-                          "Créer un compte",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                      children: [
+                        const Text("Pas de compte ? "),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignupPage(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            "Créer un compte",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
                         ),
                       ],
                     ),
