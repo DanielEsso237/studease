@@ -57,12 +57,18 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       isLoading = true;
     });
-    // Simuler un délai
     Future.delayed(const Duration(seconds: 2), () {
       setState(() {
         isLoading = false;
       });
     });
+  }
+
+  void _goToSignup() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SignupPage()),
+    );
   }
 
   @override
@@ -151,14 +157,7 @@ class _LoginPageState extends State<LoginPage> {
                       children: [
                         const Text("Pas de compte ? "),
                         GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SignupPage(),
-                              ),
-                            );
-                          },
+                          onTap: _goToSignup,
                           child: const Text(
                             "Créer un compte",
                             style: TextStyle(

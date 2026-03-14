@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class FullNameField extends StatelessWidget {
+class NameField extends StatelessWidget {
   final TextEditingController controller;
 
-  const FullNameField({Key? key, required this.controller}) : super(key: key);
+  const NameField({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
