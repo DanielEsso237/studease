@@ -20,22 +20,29 @@ class _LoginPageState extends State<LoginPage> {
   bool obscurePassword = true;
   bool isLoading = false;
 
+  bool get isFormValid =>
+      emailController.text.trim().isNotEmpty &&
+      _isValidEmail(emailController.text.trim()) &&
+      passwordController.text.length >= 6;
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(
-      "assets/animations/animated_logo.mp4",
-    )..initialize().then((_) => setState(() {}));
+    _controller =
+        VideoPlayerController.asset("assets/animations/animated_logo.mp4")
+          ..initialize().then((_) {
+            if (mounted) setState(() {});
+          });
     _controller.setLooping(true);
     _controller.setVolume(0);
     _controller.play();
 
-    emailController.addListener(_updateState);
-    passwordController.addListener(_updateState);
-  }
-
-  void _updateState() {
-    setState(() {});
+    emailController.addListener(() => setState(() {}));
+    passwordController.addListener(() => setState(() {}));
   }
 
   @override
@@ -44,13 +51,6 @@ class _LoginPageState extends State<LoginPage> {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
-  }
-
-  bool get _isFormValid {
-    final email = emailController.text.trim();
-    final password = passwordController.text;
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    return emailRegex.hasMatch(email) && password.length >= 6;
   }
 
   void _onLoginPressed() {
@@ -86,92 +86,90 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-              FractionallySizedBox(
-                widthFactor: screenWidth > 500 ? 0.5 : 0.9,
-                child: Container(
-                  padding: const EdgeInsets.all(30),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade300),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
+              Container(
+                width: 380,
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      "Connexion à Studease",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        "Connexion à StudEase",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color.fromRGBO(28, 81, 145, 100),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 25),
+                    EmailField(controller: emailController),
+                    const SizedBox(height: 16),
+                    PasswordField(
+                      controller: passwordController,
+                      obscureText: obscurePassword,
+                      toggleObscure: () {
+                        setState(() {
+                          obscurePassword = !obscurePassword;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Opacity(
+                      opacity: isFormValid ? 1.0 : 0.45,
+                      child: LoginButton(
+                        onPressed: isFormValid ? _onLoginPressed : null,
+                        label: "Continuer",
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: const [
+                        Expanded(child: Divider()),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Text("OU"),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 25),
-                      EmailField(controller: emailController),
-                      const SizedBox(height: 16),
-                      PasswordField(
-                        controller: passwordController,
-                        obscureText: obscurePassword,
-                        toggleObscure: () {
-                          setState(() {
-                            obscurePassword = !obscurePassword;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : LoginButton(
-                              onPressed: _isFormValid ? _onLoginPressed : null,
-                              label: "Continuer",
-                            ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: const [
-                          Expanded(child: Divider()),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text("OU"),
-                          ),
-                          Expanded(child: Divider()),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      GoogleLoginButton(onPressed: () {}),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text("Pas de compte ? "),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SignupPage(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              "Créer un compte",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+                        Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    GoogleLoginButton(onPressed: () {}),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Pas de compte ? "),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignupPage(),
                               ),
+                            );
+                          },
+                          child: const Text(
+                            "Créer un compte",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 30),
