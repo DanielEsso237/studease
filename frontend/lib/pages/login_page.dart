@@ -18,15 +18,29 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
   bool obscurePassword = true;
 
+  bool get isFormValid =>
+      emailController.text.trim().isNotEmpty &&
+      _isValidEmail(emailController.text.trim()) &&
+      passwordController.text.length >= 6;
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(
-      "assets/animations/animated_logo.mp4",
-    )..initialize().then((_) => setState(() {}));
+    _controller =
+        VideoPlayerController.asset("assets/animations/animated_logo.mp4")
+          ..initialize().then((_) {
+            if (mounted) setState(() {});
+          });
     _controller.setLooping(true);
     _controller.setVolume(0);
     _controller.play();
+
+    emailController.addListener(() => setState(() {}));
+    passwordController.addListener(() => setState(() {}));
   }
 
   @override
@@ -56,7 +70,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(30),
@@ -95,8 +108,14 @@ class _LoginPageState extends State<LoginPage> {
                         });
                       },
                     ),
-                    const SizedBox(height: 20),
-                    LoginButton(onPressed: () {}, label: "Continuer"),
+                    const SizedBox(height: 24),
+                    Opacity(
+                      opacity: isFormValid ? 1.0 : 0.45,
+                      child: LoginButton(
+                        onPressed: isFormValid ? () {} : null,
+                        label: "Continuer",
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     Row(
                       children: const [
@@ -110,7 +129,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
                     GoogleLoginButton(onPressed: () {}),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
