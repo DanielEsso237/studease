@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/signup_page.dart';
+
 import 'package:video_player/video_player.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
