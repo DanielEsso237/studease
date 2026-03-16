@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/signup_page.dart';
-
+import 'package:frontend/pages/chat_page.dart';
 import 'package:video_player/video_player.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
@@ -72,6 +72,13 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  void _goToChat_page() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChatPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -112,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      "Connexion à Studease",
+                      "Connexion à StudEase",
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -158,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
                       children: [
                         const Text("Pas de compte ? "),
                         GestureDetector(
-                          onTap: _goToSignup,
+                          onTap: _goToChat_page,
                           child: const Text(
                             "Créer un compte",
                             style: TextStyle(

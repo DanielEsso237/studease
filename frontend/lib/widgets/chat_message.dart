@@ -8,21 +8,41 @@ class ChatMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      color: isUser ? Colors.transparent : const Color(0xffF7F7F8),
+    if (isUser) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xffE5E5EA),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text(text, style: const TextStyle(fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: isUser ? Colors.black : Colors.green,
-            child: Text(
-              isUser ? "U" : "S",
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.blue,
+            child: Text("S", style: TextStyle(color: Colors.white)),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
