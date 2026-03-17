@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ChatAppBar({super.key});
+  final VoidCallback onMenuPressed;
+
+  const ChatAppBar({super.key, required this.onMenuPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -9,6 +11,10 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 1,
       backgroundColor: Colors.white,
       centerTitle: true,
+      leading: IconButton(
+        icon: const Icon(Icons.menu, color: Colors.black),
+        onPressed: onMenuPressed,
+      ),
       iconTheme: const IconThemeData(color: Colors.black),
       title: Image.asset(
         "assets/images/logo_appbar.png",

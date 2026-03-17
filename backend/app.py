@@ -1,0 +1,88 @@
+from flask import Flask, request, Response, jsonify
+from flasgger import Swagger
+import requests
+import json
+
+app = Flask(__name__)
+swagger = Swagger(app)
+
+API_KEY = "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"
+MODEL = "stepfun/step-3.5-flash:free"
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """
+    Envoie un message à StepFun: Step 3.5 (streaming supporté)
+    ---
+    tags:
+      - Chat
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            stream:
+              type: boolean
+              default: false
+    responses:
+      200:
+        description: Réponse (stream ou JSON)
+      400:
+        description: Message manquant
+      500:
+        description: Erreur
+    """
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
+
+    user_message = data['message']
+    stream_requested = data.get('stream', False)
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "Studease Chat"
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": user_message}],
+        "stream": stream_requested
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, stream=stream_requested, timeout=90)
+
+        if not stream_requested:
+            resp.raise_for_status()
+            result = resp.json()
+            return jsonify({"response": result['choices'][0]['message']['content']})
+
+        
+        def generate():
+            for chunk in resp.iter_lines():
+                if chunk:
+                    decoded = chunk.decode('utf-8')
+                    if decoded.startswith('data: '):
+                        yield decoded + '\n\n'
+                    elif decoded == 'data: [DONE]':
+                        yield 'data: [DONE]\n\n'
+                        break
+
+        return Response(generate(), mimetype='text/event-stream')
+
+    except requests.exceptions.RequestException as e:
+        error_text = e.response.text if e.response else str(e)
+        return jsonify({"error": f"Erreur OpenRouter: {error_text}"}), 500
+
+
+if __name__ == '__main__':
+    print("Backend streaming démarré sur http://127.0.0.1:5000")
+    print("Swagger: http://127.0.0.1:5000/apidocs")
+    app.run(debug=True, host='0.0.0.0', port=5000)
