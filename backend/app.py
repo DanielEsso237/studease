@@ -1,12 +1,11 @@
 from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 import requests
-import json
 
 app = Flask(__name__)
 swagger = Swagger(app)
 
-API_KEY = "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"
+API_KEY = "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"
 MODEL = "stepfun/step-3.5-flash:free"
 
 @app.route('/chat', methods=['POST'])

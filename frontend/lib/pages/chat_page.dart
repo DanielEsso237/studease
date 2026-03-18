@@ -99,7 +99,6 @@ class _ChatPageState extends State<ChatPage> {
 
     try {
       final request = http.Request('POST', Uri.parse(_apiUrl));
-      request.headers['ngrok-skip-browser-warning'] = '1';
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode({'message': text, 'stream': true});
 
@@ -179,37 +178,98 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Widget _buildEmptyChatPlaceholder() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight:
+                MediaQuery.of(context).size.height -
+                MediaQuery.of(context).viewInsets.bottom -
+                kToolbarHeight -
+                100, // marge pour appbar + input
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.blue,
+                    child: Text(
+                      "S",
+                      style: TextStyle(
+                        fontSize: 36,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Salut ! On commence par quoi aujourd'hui ?",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Pose-moi une question, explique-moi un concept,\nou demande-moi de t'aider avec tes révisions !",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey.shade700,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset:
+          true, // ← important pour que le Scaffold gère bien le clavier
       appBar: ChatAppBar(onMenuPressed: _toggleSidebar),
       body: Stack(
         children: [
           Column(
             children: [
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.only(bottom: 8),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _messages.length) {
-                      return const ThinkingIndicator();
-                    }
+                child: _messages.isEmpty && !_isLoading
+                    ? _buildEmptyChatPlaceholder()
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(bottom: 8),
+                        itemCount: _messages.length + (_isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _messages.length) {
+                            return const ThinkingIndicator();
+                          }
 
-                    final msg = _messages[index];
-                    final isUser = msg['role'] == 'user';
-                    final text = msg['content'] ?? '';
+                          final msg = _messages[index];
+                          final isUser = msg['role'] == 'user';
+                          final text = msg['content'] ?? '';
 
-                    return ChatMessage(text: text, isUser: isUser);
-                  },
-                ),
+                          return ChatMessage(text: text, isUser: isUser);
+                        },
+                      ),
               ),
               ChatInput(controller: _controller, onSend: _sendMessage),
             ],
           ),
 
-          // Sidebar overlay
           if (_showSidebar)
             Positioned.fill(
               child: GestureDetector(
