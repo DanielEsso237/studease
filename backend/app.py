@@ -1,11 +1,20 @@
 from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 import requests
+from dotenv import load_dotenv
+import os
+
+
+load_dotenv()
 
 app = Flask(__name__)
 swagger = Swagger(app)
 
-API_KEY = "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"
+
+API_KEY = os.getenv("OPENROUTER_API_KEY")
+if not API_KEY:
+    raise ValueError("La variable OPENROUTER_API_KEY n'est pas définie dans le fichier .env")
+
 MODEL = "stepfun/step-3.5-flash:free"
 
 @app.route('/chat', methods=['POST'])
@@ -63,7 +72,7 @@ def chat():
             result = resp.json()
             return jsonify({"response": result['choices'][0]['message']['content']})
 
-        
+        # Streaming
         def generate():
             for chunk in resp.iter_lines():
                 if chunk:
