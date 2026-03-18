@@ -4,12 +4,10 @@ import requests
 from dotenv import load_dotenv
 import os
 
-
 load_dotenv()
 
 app = Flask(__name__)
 swagger = Swagger(app)
-
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not API_KEY:
@@ -17,39 +15,30 @@ if not API_KEY:
 
 MODEL = "stepfun/step-3.5-flash:free"
 
+SYSTEM_PROMPT = """Tu es Studease, l'assistant intelligent officiel et expert de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
+
+Ton rôle principal est d'aider les étudiants, les enseignants et le personnel administratif dans toutes leurs préoccupations liées à la faculté : inscriptions, programmes académiques, emplois du temps, procédures administratives, services, bourses, événements, règles internes, orientation, stages, etc.
+
+Tu réponds toujours en français, de façon claire, précise, amicale et encourageante. 
+Tu es patient, pédagogique et tu donnes des réponses structurées quand c’est utile.
+Si tu ne connais pas la réponse exacte, tu le dis honnêtement et tu proposes des solutions (contacter le secrétariat, consulter le site officiel, etc.).
+
+Tu es un système expert propulsé par intelligence artificielle au service exclusif de la communauté de la Faculté des Sciences de l'Université d'Ebolowa."""
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """
-    Envoie un message à StepFun: Step 3.5 (streaming supporté)
+    Chat avec Studease (prompt système + streaming)
     ---
     tags:
       - Chat
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            stream:
-              type: boolean
-              default: false
-    responses:
-      200:
-        description: Réponse (stream ou JSON)
-      400:
-        description: Message manquant
-      500:
-        description: Erreur
     """
     data = request.get_json()
     if not data or 'message' not in data:
         return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
 
     user_message = data['message']
-    stream_requested = data.get('stream', False)
+    stream_requested = data.get('stream', True)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -58,10 +47,16 @@ def chat():
         "HTTP-Referer": "http://localhost",
         "X-Title": "Studease Chat"
     }
+
     payload = {
         "model": MODEL,
-        "messages": [{"role": "user", "content": user_message}],
-        "stream": stream_requested
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message}
+        ],
+        "stream": stream_requested,
+        "temperature": 0.7,
+        "max_tokens": 1024
     }
 
     try:
@@ -72,7 +67,7 @@ def chat():
             result = resp.json()
             return jsonify({"response": result['choices'][0]['message']['content']})
 
-        # Streaming
+        # === STREAMING ===
         def generate():
             for chunk in resp.iter_lines():
                 if chunk:
@@ -91,6 +86,6 @@ def chat():
 
 
 if __name__ == '__main__':
-    print("Backend streaming démarré sur http://127.0.0.1:5000")
-    print("Swagger: http://127.0.0.1:5000/apidocs")
+    print("🚀 Backend Studease démarré sur http://0.0.0.0:5000")
+    print("📋 Swagger UI → http://127.0.0.1:5000/apidocs")
     app.run(debug=True, host='0.0.0.0', port=5000)
