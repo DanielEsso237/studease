@@ -50,6 +50,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+
     _videoController =
         VideoPlayerController.asset("assets/animations/animated_logo.mp4")
           ..initialize().then((_) {

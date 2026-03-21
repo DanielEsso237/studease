@@ -187,7 +187,7 @@ class _ChatPageState extends State<ChatPage> {
                 MediaQuery.of(context).size.height -
                 MediaQuery.of(context).viewInsets.bottom -
                 kToolbarHeight -
-                100, // marge pour appbar + input
+                100,
           ),
           child: Center(
             child: Padding(
