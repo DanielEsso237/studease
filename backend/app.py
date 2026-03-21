@@ -1,14 +1,34 @@
 from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
+from flask_cors import CORS
 import requests
 from dotenv import load_dotenv
 import os
 
+from db import db
+from models.user import User
+from routes.auth import auth_bp
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 swagger = Swagger(app)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("La variable DATABASE_URL n'est pas définie dans le fichier .env")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
+
+
+with app.app_context():
+    db.create_all()
+
+app.register_blueprint(auth_bp)
 
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -16,6 +36,7 @@ if not API_KEY:
     raise ValueError("La variable OPENROUTER_API_KEY n'est pas définie dans le fichier .env")
 
 MODEL = "stepfun/step-3.5-flash:free"
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -65,14 +86,16 @@ def chat():
     }
 
     try:
-        resp = requests.post(url, json=payload, headers=headers, stream=stream_requested, timeout=90)
+        resp = requests.post(
+            url, json=payload, headers=headers,
+            stream=stream_requested, timeout=90
+        )
 
         if not stream_requested:
             resp.raise_for_status()
             result = resp.json()
             return jsonify({"response": result['choices'][0]['message']['content']})
 
-        # Streaming
         def generate():
             for chunk in resp.iter_lines():
                 if chunk:
@@ -91,6 +114,6 @@ def chat():
 
 
 if __name__ == '__main__':
-    print("Backend streaming démarré sur http://127.0.0.1:5000")
+    print("Backend démarré sur http://127.0.0.1:5000")
     print("Swagger: http://127.0.0.1:5000/apidocs")
     app.run(debug=True, host='0.0.0.0', port=5000)
