@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatMessage extends StatelessWidget {
   final String text;
@@ -24,6 +25,7 @@ class ChatMessage extends StatelessWidget {
                   color: const Color(0xffE5E5EA),
                   borderRadius: BorderRadius.circular(18),
                 ),
+
                 child: Text(text, style: const TextStyle(fontSize: 15)),
               ),
             ),
@@ -44,9 +46,30 @@ class ChatMessage extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 15, height: 1.5),
+            child: MarkdownBody(
+              data: text,
+              styleSheet: MarkdownStyleSheet(
+                p: const TextStyle(fontSize: 15, height: 1.5),
+                strong: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+                em: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic),
+                h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                listBullet: const TextStyle(fontSize: 15, height: 1.5),
+                code: TextStyle(
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  backgroundColor: Colors.grey.shade200,
+                ),
+                codeblockDecoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              shrinkWrap: true,
             ),
           ),
         ],
