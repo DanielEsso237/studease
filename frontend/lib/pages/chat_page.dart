@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
+import '../services/auth_service.dart';
 import '../widgets/chat_app_bar.dart';
 import '../widgets/chat_message.dart';
 import '../widgets/chat_input.dart';
@@ -29,15 +32,36 @@ class _ChatPageState extends State<ChatPage> {
   ];
   int _selectedConversationIndex = 0;
 
-  final String _apiUrl =
-      'https://enriqueta-overpositive-leandra.ngrok-free.dev/chat';
+  String _username = '';
+  String _greeting = '';
+
+  static const List<String> _greetings = [
+    "Salut {name} ! On commence par quoi aujourd'hui ?",
+    "Bonjour {name} ! Je suis prêt à t'aider 😊",
+    "Content de te revoir, {name} ! Qu'est-ce qu'on explore aujourd'hui ?",
+    "Hey {name} ! Une question sur la fac ou un cours à réviser ?",
+    "Bienvenue {name} ! Pose-moi ta question, je suis tout ouïe 🎓",
+  ];
+
+  String get _personalizedGreeting => _greeting.replaceAll('{name}', _username);
 
   @override
   void initState() {
     super.initState();
+    _greeting = _greetings[Random().nextInt(_greetings.length)];
+    _loadUsername();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animate: false);
     });
+  }
+
+  Future<void> _loadUsername() async {
+    final name = await AuthService.getUserName();
+    if (mounted) {
+      setState(() {
+        _username = name ?? 'toi';
+      });
+    }
   }
 
   void _scrollToBottom({bool animate = true}) {
@@ -54,11 +78,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  void _toggleSidebar() {
-    setState(() {
-      _showSidebar = !_showSidebar;
-    });
-  }
+  void _toggleSidebar() => setState(() => _showSidebar = !_showSidebar);
 
   void _selectConversation(int index) {
     setState(() {
@@ -98,7 +118,7 @@ class _ChatPageState extends State<ChatPage> {
     _scrollToBottom();
 
     try {
-      final request = http.Request('POST', Uri.parse(_apiUrl));
+      final request = http.Request('POST', Uri.parse(AppConfig.chatUrl));
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode({'message': text, 'stream': true});
 
@@ -195,23 +215,23 @@ class _ChatPageState extends State<ChatPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 40,
-                    backgroundColor: Colors.blue,
-                    child: Text(
-                      "S",
-                      style: TextStyle(
-                        fontSize: 36,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.white,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/bot.png',
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    "Salut ! On commence par quoi aujourd'hui ?",
+                  Text(
+                    _personalizedGreeting,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w500,
                       height: 1.4,
@@ -219,7 +239,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    "Pose-moi une question, explique-moi un concept,\nou demande-moi de t'aider avec tes révisions !",
+                    "Pose-moi une question sur la fac, un cours,\nou une procédure administrative !",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,
@@ -239,8 +259,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset:
-          true, // ← important pour que le Scaffold gère bien le clavier
+      resizeToAvoidBottomInset: true,
       appBar: ChatAppBar(onMenuPressed: _toggleSidebar),
       body: Stack(
         children: [
@@ -257,11 +276,9 @@ class _ChatPageState extends State<ChatPage> {
                           if (index == _messages.length) {
                             return const ThinkingIndicator();
                           }
-
                           final msg = _messages[index];
                           final isUser = msg['role'] == 'user';
                           final text = msg['content'] ?? '';
-
                           return ChatMessage(text: text, isUser: isUser);
                         },
                       ),
