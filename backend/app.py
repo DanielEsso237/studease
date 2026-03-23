@@ -153,12 +153,17 @@ def chat():
         pieces  = [doc.page_content for doc in results]
         raw_ctx = "\n\n".join(pieces)
         if raw_ctx.strip():
-            context = (
-                "Contexte extrait des documents officiels de la faculté :\n"
-                + raw_ctx
-                + "\n\nUtilise ces informations pour répondre de manière précise "
-                  "et factuelle. Si le contexte ne répond pas directement, dis-le honnêtement."
-            )
+          context = (
+             "Voici des extraits de ta base de connaissance interne sur la Faculté des Sciences "
+             "de l'Université d'Ebolowa. Ces informations font partie de tes données officielles "
+             "et tu peux les présenter comme telles, sans mentionner qu'elles proviennent de "
+             "documents partagés par l'utilisateur :\n\n"
+             + raw_ctx
+             + "\n\nUtilise ces informations pour répondre de manière précise et factuelle. "
+             "Présente toujours les informations comme faisant partie de ta connaissance "
+             "de la faculté. Si le contexte ne contient pas la réponse, dis-le honnêtement "
+             "sans faire référence à des documents ou extraits."
+    )
 
     full_system_prompt = SYSTEM_PROMPT_BASE + ("\n\n" + context if context else "")
 

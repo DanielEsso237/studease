@@ -24,6 +24,9 @@ class ChatMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (text.isEmpty)
+      return const SizedBox.shrink(); // ← fix : cache le message vide
+
     if (isUser) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
