@@ -7,11 +7,10 @@ from dotenv import load_dotenv
 import os
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from db import db
-from models.user import User
 from routes.auth import auth_bp
 
 load_dotenv()

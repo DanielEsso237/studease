@@ -7,6 +7,21 @@ class ChatMessage extends StatelessWidget {
 
   const ChatMessage({super.key, required this.text, required this.isUser});
 
+  static Widget _botAvatar() {
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: Colors.white,
+      child: ClipOval(
+        child: Image.asset(
+          'assets/images/bot.png',
+          width: 36,
+          height: 36,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isUser) {
@@ -25,7 +40,6 @@ class ChatMessage extends StatelessWidget {
                   color: const Color(0xffE5E5EA),
                   borderRadius: BorderRadius.circular(18),
                 ),
-
                 child: Text(text, style: const TextStyle(fontSize: 15)),
               ),
             ),
@@ -39,11 +53,7 @@ class ChatMessage extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.blue,
-            child: Text("S", style: TextStyle(color: Colors.white)),
-          ),
+          _botAvatar(),
           const SizedBox(width: 10),
           Expanded(
             child: MarkdownBody(
