@@ -9,31 +9,26 @@ import '../widgets/chat_message.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/thinking_indicator.dart';
 import '../widgets/chat_sidebar.dart';
+import '../models/conv_summary.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
-
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> {
+  List<ConvSummary> _conversations = [];
+  int? _currentConvId;
+
   final List<Map<String, String>> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
-
   bool _showSidebar = false;
-  final List<String> _conversations = [
-    "Discussion sur les maths",
-    "Préparation examen physique",
-    "Questions de culture générale",
-    "Nouvelle conversation 1",
-  ];
-  int _selectedConversationIndex = 0;
 
   String _username = '';
-  String _greeting = '';
+  late String _greeting;
 
   static const List<String> _greetings = [
     "Salut {name} ! On commence par quoi aujourd'hui ?",
@@ -50,51 +45,113 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _greeting = _greetings[Random().nextInt(_greetings.length)];
     _loadUsername();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom(animate: false);
-    });
+    _fetchConversations();
   }
 
   Future<void> _loadUsername() async {
     final name = await AuthService.getUserName();
-    if (mounted) {
+    if (mounted) setState(() => _username = name ?? 'toi');
+  }
+
+  Future<String?> _authHeader() async {
+    final token = await AuthService.getToken();
+    return token != null ? 'Bearer $token' : null;
+  }
+
+  Future<void> _fetchConversations() async {
+    final auth = await _authHeader();
+    if (auth == null) return;
+    try {
+      final res = await http
+          .get(
+            Uri.parse(AppConfig.conversationsUrl),
+            headers: {'Authorization': auth},
+          )
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final List list = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            _conversations = list.map((j) => ConvSummary.fromJson(j)).toList();
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadConversation(ConvSummary conv) async {
+    final auth = await _authHeader();
+    if (auth == null) return;
+    try {
+      final res = await http
+          .get(
+            Uri.parse(AppConfig.messagesUrl(conv.id)),
+            headers: {'Authorization': auth},
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final List list = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            _currentConvId = conv.id;
+            _isLoading = false;
+            _messages.clear();
+            _messages.addAll(
+              list.map<Map<String, String>>(
+                (m) => {
+                  'role': m['role'] as String,
+                  'content': m['content'] as String,
+                },
+              ),
+            );
+            _showSidebar = false;
+          });
+          await Future.delayed(const Duration(milliseconds: 100));
+          _scrollToBottom(animate: false);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _deleteConversation(ConvSummary conv) async {
+    final auth = await _authHeader();
+    if (auth == null) return;
+    await http.delete(
+      Uri.parse(AppConfig.deleteConvUrl(conv.id)),
+      headers: {'Authorization': auth},
+    );
+    if (_currentConvId == conv.id) {
       setState(() {
-        _username = name ?? 'toi';
+        _messages.clear();
+        _currentConvId = null;
       });
     }
+    _fetchConversations();
   }
 
   void _scrollToBottom({bool animate = true}) {
     if (!_scrollController.hasClients) return;
-    final position = _scrollController.position.maxScrollExtent;
+    final max = _scrollController.position.maxScrollExtent;
     if (animate) {
       _scrollController.animateTo(
-        position,
+        max,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     } else {
-      _scrollController.jumpTo(position);
+      _scrollController.jumpTo(max);
     }
   }
 
   void _toggleSidebar() => setState(() => _showSidebar = !_showSidebar);
 
-  void _selectConversation(int index) {
-    setState(() {
-      _selectedConversationIndex = index;
-      _showSidebar = false;
-    });
-  }
-
   void _startNewChat() {
     setState(() {
       _messages.clear();
-      _conversations.insert(0, "Nouvelle conversation");
-      _selectedConversationIndex = 0;
+      _currentConvId = null;
       _showSidebar = false;
     });
-    _scrollToBottom(animate: false);
   }
 
   Future<void> _sendMessage() async {
@@ -102,31 +159,35 @@ class _ChatPageState extends State<ChatPage> {
     if (text.isEmpty) return;
 
     FocusScope.of(context).unfocus();
+    _controller.clear();
+
+    final auth = await _authHeader();
+    if (auth == null) return;
 
     setState(() {
       _messages.add({'role': 'user', 'content': text});
       _isLoading = true;
     });
 
-    _controller.clear();
+    await Future.delayed(const Duration(milliseconds: 100));
     _scrollToBottom();
 
     final newAssistantIndex = _messages.length;
     _messages.add({'role': 'assistant', 'content': ''});
 
-    await Future.delayed(const Duration(milliseconds: 100));
-    _scrollToBottom();
-
     try {
       final request = http.Request('POST', Uri.parse(AppConfig.chatUrl));
       request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({'message': text, 'stream': true});
+      request.headers['Authorization'] = auth;
+      request.body = jsonEncode({
+        'message': text,
+        'conversation_id': _currentConvId,
+        'stream': true,
+      });
 
       final response = await request.send();
-
-      if (response.statusCode != 200) {
+      if (response.statusCode != 200)
         throw Exception('Erreur ${response.statusCode}');
-      }
 
       String buffer = '';
 
@@ -135,13 +196,11 @@ class _ChatPageState extends State<ChatPage> {
           .listen(
             (chunk) {
               buffer += chunk;
-
               while (true) {
-                final lineBreak = buffer.indexOf('\n');
-                if (lineBreak == -1) break;
-
-                final line = buffer.substring(0, lineBreak).trim();
-                buffer = buffer.substring(lineBreak + 1);
+                final lb = buffer.indexOf('\n');
+                if (lb == -1) break;
+                final line = buffer.substring(0, lb).trim();
+                buffer = buffer.substring(lb + 1);
 
                 if (line.isEmpty || !line.startsWith('data: ')) continue;
                 final data = line.substring(6).trim();
@@ -149,11 +208,19 @@ class _ChatPageState extends State<ChatPage> {
                 if (data == '[DONE]') {
                   setState(() => _isLoading = false);
                   _scrollToBottom();
+                  _fetchConversations();
                   return;
                 }
 
                 try {
                   final json = jsonDecode(data);
+
+                  if (json.containsKey('conversation_id') &&
+                      _currentConvId == null) {
+                    _currentConvId = json['conversation_id'] as int;
+                    return;
+                  }
+
                   final delta =
                       json['choices']?[0]?['delta']?['content'] as String?;
                   if (delta != null && delta.isNotEmpty) {
@@ -173,6 +240,7 @@ class _ChatPageState extends State<ChatPage> {
             onDone: () {
               setState(() => _isLoading = false);
               _scrollToBottom();
+              _fetchConversations();
             },
             onError: (error) {
               setState(() {
@@ -182,7 +250,6 @@ class _ChatPageState extends State<ChatPage> {
                 };
                 _isLoading = false;
               });
-              _scrollToBottom();
             },
             cancelOnError: true,
           );
@@ -194,20 +261,16 @@ class _ChatPageState extends State<ChatPage> {
         };
         _isLoading = false;
       });
-      _scrollToBottom();
     }
   }
 
-  Widget _buildEmptyChatPlaceholder() {
+  Widget _buildEmptyPlaceholder() {
     return SafeArea(
       child: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: BoxConstraints(
             minHeight:
-                MediaQuery.of(context).size.height -
-                MediaQuery.of(context).viewInsets.bottom -
-                kToolbarHeight -
-                100,
+                MediaQuery.of(context).size.height - kToolbarHeight - 100,
           ),
           child: Center(
             child: Padding(
@@ -267,7 +330,7 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               Expanded(
                 child: _messages.isEmpty && !_isLoading
-                    ? _buildEmptyChatPlaceholder()
+                    ? _buildEmptyPlaceholder()
                     : ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.only(bottom: 8),
@@ -278,8 +341,10 @@ class _ChatPageState extends State<ChatPage> {
                           }
                           final msg = _messages[index];
                           final isUser = msg['role'] == 'user';
-                          final text = msg['content'] ?? '';
-                          return ChatMessage(text: text, isUser: isUser);
+                          return ChatMessage(
+                            text: msg['content'] ?? '',
+                            isUser: isUser,
+                          );
                         },
                       ),
               ),
@@ -304,8 +369,9 @@ class _ChatPageState extends State<ChatPage> {
                 onTap: () {},
                 child: ChatSidebar(
                   conversations: _conversations,
-                  selectedIndex: _selectedConversationIndex,
-                  onSelect: _selectConversation,
+                  selectedConvId: _currentConvId,
+                  onSelect: _loadConversation,
+                  onDelete: _deleteConversation,
                   onNewChat: _startNewChat,
                   onClose: _toggleSidebar,
                 ),

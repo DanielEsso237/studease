@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../pages/login_page.dart';
+import '../models/conv_summary.dart';
 
 class ChatSidebar extends StatelessWidget {
-  final List<String> conversations;
-  final int selectedIndex;
-  final Function(int) onSelect;
+  final List<ConvSummary> conversations;
+  final int? selectedConvId;
+  final Function(ConvSummary) onSelect;
+  final Function(ConvSummary) onDelete;
   final VoidCallback onNewChat;
   final VoidCallback onClose;
 
   const ChatSidebar({
     super.key,
     required this.conversations,
-    required this.selectedIndex,
+    required this.selectedConvId,
     required this.onSelect,
+    required this.onDelete,
     required this.onNewChat,
     required this.onClose,
   });
@@ -39,11 +42,8 @@ class ChatSidebar extends StatelessWidget {
         ],
       ),
     );
-
     if (confirm != true) return;
-
     await AuthService.logout();
-
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -61,7 +61,6 @@ class ChatSidebar extends StatelessWidget {
         color: Colors.white,
         child: Column(
           children: [
-            // ── Header ──────────────────────────────────────────────────────
             Container(
               height: 55,
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -81,7 +80,6 @@ class ChatSidebar extends StatelessWidget {
               ),
             ),
 
-            // ── Nouvelle conversation ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.all(12),
               child: ElevatedButton(
@@ -93,25 +91,41 @@ class ChatSidebar extends StatelessWidget {
               ),
             ),
 
-            // ── Liste des conversations ──────────────────────────────────────
             Expanded(
-              child: ListView.builder(
-                itemCount: conversations.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(
-                      conversations[index],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              child: conversations.isEmpty
+                  ? Center(
+                      child: Text(
+                        "Aucune conversation",
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: conversations.length,
+                      itemBuilder: (context, index) {
+                        final conv = conversations[index];
+                        final isSelected = conv.id == selectedConvId;
+                        return ListTile(
+                          selected: isSelected,
+                          selectedTileColor: Colors.blue.shade50,
+                          title: Text(
+                            conv.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => onSelect(conv),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => onDelete(conv),
+                          ),
+                        );
+                      },
                     ),
-                    selected: selectedIndex == index,
-                    onTap: () => onSelect(index),
-                  );
-                },
-              ),
             ),
 
-            // ── Bouton Déconnexion ───────────────────────────────────────────
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(12),

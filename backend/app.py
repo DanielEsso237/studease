@@ -1,8 +1,9 @@
 from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
-import requests
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+import requests, json
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 from pypdf import PdfReader
@@ -12,6 +13,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from db import db
 from routes.auth import auth_bp
+from routes.conversations import conv_bp
+from models.conversation import Conversation
+from models.message import Message
 
 load_dotenv()
 
@@ -19,14 +23,12 @@ app = Flask(__name__)
 CORS(app)
 swagger = Swagger(app)
 
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL n'est pas définie dans .env")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 
 JWT_SECRET = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET:
@@ -42,14 +44,13 @@ with app.app_context():
     db.create_all()
 
 app.register_blueprint(auth_bp)
-
+app.register_blueprint(conv_bp)
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'est pas définie dans .env")
 
 MODEL = "stepfun/step-3.5-flash:free"
-
 
 SYSTEM_PROMPT_BASE = """Tu es Studease, l'assistant intelligent officiel et expert de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
 
@@ -60,7 +61,6 @@ Tu es patient, pédagogique et tu donnes des réponses structurées quand c'est 
 Si tu ne connais pas la réponse exacte, tu le dis honnêtement et tu proposes des solutions (contacter le secrétariat, consulter le site officiel, etc.).
 
 Tu es un système expert propulsé par intelligence artificielle au service exclusif de la communauté de la Faculté des Sciences de l'Université d'Ebolowa."""
-
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -73,17 +73,14 @@ def load_or_create_vectorstore():
     global vector_store
 
     if os.path.exists(INDEX_PATH):
-        print("Chargement de l'index FAISS existant...")
         vector_store = FAISS.load_local(
             INDEX_PATH, embeddings, allow_dangerous_deserialization=True
         )
         return
 
-    print("Création d'un nouvel index FAISS...")
     docs = []
 
     if not os.path.exists(PDF_FOLDER):
-        print(f"Dossier PDF introuvable : {PDF_FOLDER} → RAG désactivé")
         return
 
     for filename in os.listdir(PDF_FOLDER):
@@ -98,22 +95,20 @@ def load_or_create_vectorstore():
             )
             for chunk in splitter.split_text(text):
                 docs.append(Document(page_content=chunk, metadata={"source": filename}))
-        except Exception as e:
-            print(f"Erreur lecture {filename} : {e}")
+        except Exception:
+            pass
 
     if docs:
         os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
         vector_store = FAISS.from_documents(docs, embeddings)
         vector_store.save_local(INDEX_PATH)
-        print(f"Index FAISS créé avec {len(docs)} chunks.")
-    else:
-        print("Aucun PDF valide trouvé → RAG désactivé")
 
 
 load_or_create_vectorstore()
 
 
 @app.route('/chat', methods=['POST'])
+@jwt_required()
 def chat():
     """
     Envoie un message à Studease (RAG + streaming)
@@ -129,6 +124,8 @@ def chat():
           properties:
             message:
               type: string
+            conversation_id:
+              type: integer
             stream:
               type: boolean
               default: true
@@ -137,33 +134,54 @@ def chat():
         description: Réponse streamée ou JSON
       400:
         description: Message manquant
+      404:
+        description: Conversation introuvable
       500:
         description: Erreur serveur
     """
-    data = request.get_json()
+    user_id = int(get_jwt_identity())
+    data    = request.get_json()
     if not data or 'message' not in data:
         return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
 
     user_message     = data['message']
+    conv_id          = data.get('conversation_id')
     stream_requested = data.get('stream', True)
+
+    if conv_id:
+        conv = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
+        if not conv:
+            return jsonify({"error": "Conversation introuvable"}), 404
+    else:
+        title = user_message[:60] + ("…" if len(user_message) > 60 else "")
+        conv  = Conversation(user_id=user_id, title=title)
+        db.session.add(conv)
+        db.session.commit()
+
+    db.session.add(Message(conversation_id=conv.id, role='user', content=user_message))
+    db.session.commit()
+
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in conv.messages[:-1]
+    ]
 
     context = ""
     if vector_store:
         results = vector_store.similarity_search(user_message, k=4)
-        pieces  = [doc.page_content for doc in results]
-        raw_ctx = "\n\n".join(pieces)
+        raw_ctx = "\n\n".join(doc.page_content for doc in results)
         if raw_ctx.strip():
-          context = (
-             "Voici des extraits de ta base de connaissance interne sur la Faculté des Sciences "
-             "de l'Université d'Ebolowa. Ces informations font partie de tes données officielles "
-             "et tu peux les présenter comme telles, sans mentionner qu'elles proviennent de "
-             "documents partagés par l'utilisateur :\n\n"
-             + raw_ctx
-             + "\n\nUtilise ces informations pour répondre de manière précise et factuelle. "
-             "Présente toujours les informations comme faisant partie de ta connaissance "
-             "de la faculté. Si le contexte ne contient pas la réponse, dis-le honnêtement "
-             "sans faire référence à des documents ou extraits."
-    )
+            context = (
+                "Voici des extraits de ta base de connaissance interne sur la Faculté des Sciences "
+                "de l'Université d'Ebolowa. Ces informations font partie de tes données officielles "
+                "et tu peux les présenter comme telles, sans mentionner qu'elles proviennent de "
+                "documents partagés par l'utilisateur :\n\n"
+                + raw_ctx
+                + "\n\nUtilise ces informations pour répondre de manière précise et factuelle. "
+                "Présente toujours les informations comme faisant partie de ta connaissance "
+                "de la faculté. Si le contexte ne contient pas la réponse, dis-le honnêtement "
+                "sans faire référence à des documents ou extraits."
+            )
 
     full_system_prompt = SYSTEM_PROMPT_BASE + ("\n\n" + context if context else "")
 
@@ -171,7 +189,8 @@ def chat():
         "model": MODEL,
         "messages": [
             {"role": "system", "content": full_system_prompt},
-            {"role": "user",   "content": user_message},
+            *history,
+            {"role": "user", "content": user_message},
         ],
         "stream":      stream_requested,
         "temperature": 0.65,
@@ -194,18 +213,58 @@ def chat():
 
         if not stream_requested:
             resp.raise_for_status()
-            result = resp.json()
-            return jsonify({"response": result['choices'][0]['message']['content']})
+            answer = resp.json()['choices'][0]['message']['content']
+            with app.app_context():
+                db.session.add(Message(
+                    conversation_id=conv.id, role='assistant', content=answer))
+                db.session.execute(
+                    db.update(Conversation)
+                    .where(Conversation.id == conv.id)
+                    .values(updated_at=datetime.utcnow())
+                )
+                db.session.commit()
+            return jsonify({"response": answer, "conversation_id": conv.id})
+
+        assistant_buffer = []
 
         def generate():
+            yield f"data: {json.dumps({'conversation_id': conv.id})}\n\n"
+
             for chunk in resp.iter_lines():
-                if chunk:
-                    decoded = chunk.decode('utf-8')
-                    if decoded.startswith('data: '):
-                        yield decoded + '\n\n'
-                    elif decoded == 'data: [DONE]':
-                        yield 'data: [DONE]\n\n'
-                        break
+                if not chunk:
+                    continue
+                decoded = chunk.decode('utf-8')
+                if not decoded.startswith('data: '):
+                    continue
+
+                payload_str = decoded[6:].strip()
+
+                if payload_str == '[DONE]':
+                    full_answer = ''.join(assistant_buffer)
+                    with app.app_context():
+                        db.session.add(Message(
+                            conversation_id=conv.id,
+                            role='assistant',
+                            content=full_answer
+                        ))
+                        db.session.execute(
+                            db.update(Conversation)
+                            .where(Conversation.id == conv.id)
+                            .values(updated_at=datetime.utcnow())
+                        )
+                        db.session.commit()
+                    yield 'data: [DONE]\n\n'
+                    break
+
+                try:
+                    parsed = json.loads(payload_str)
+                    delta  = parsed['choices'][0]['delta'].get('content', '')
+                    if delta:
+                        assistant_buffer.append(delta)
+                except Exception:
+                    pass
+
+                yield decoded + '\n\n'
 
         return Response(generate(), mimetype='text/event-stream')
 
@@ -215,6 +274,4 @@ def chat():
 
 
 if __name__ == '__main__':
-    print("Backend Studease démarré sur http://0.0.0.0:5000")
-    print("Swagger UI → http://127.0.0.1:5000/apidocs")
     app.run(debug=True, host='0.0.0.0', port=5000)
