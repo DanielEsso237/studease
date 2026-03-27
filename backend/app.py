@@ -68,6 +68,8 @@ INDEX_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
 embeddings   = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 vector_store = None
 
+MAX_HISTORY = 10
+
 
 def load_or_create_vectorstore():
     global vector_store
@@ -161,10 +163,11 @@ def chat():
     db.session.add(Message(conversation_id=conv.id, role='user', content=user_message))
     db.session.commit()
 
-    history = [
+    raw_history = [
         {"role": m.role, "content": m.content}
         for m in conv.messages[:-1]
     ]
+    history = raw_history[-MAX_HISTORY:]
 
     context = ""
     if vector_store:
