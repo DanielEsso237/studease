@@ -58,10 +58,17 @@ class _ThinkingIndicatorState extends State<ThinkingIndicator>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 18,
-            backgroundColor: Colors.blue,
-            child: Text("S", style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.white,
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/bot.png',
+                width: 36,
+                height: 36,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(

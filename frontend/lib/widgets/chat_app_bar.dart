@@ -15,11 +15,14 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         icon: const Icon(Icons.menu, color: Colors.black),
         onPressed: onMenuPressed,
       ),
-      iconTheme: const IconThemeData(color: Colors.black),
-      title: Image.asset(
-        "assets/images/logo_appbar.png",
-        height: 40,
-        fit: BoxFit.contain,
+      title: const Text(
+        "StudEase",
+        style: TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
