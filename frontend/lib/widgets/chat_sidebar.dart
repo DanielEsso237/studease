@@ -21,6 +21,29 @@ class ChatSidebar extends StatelessWidget {
     required this.onClose,
   });
 
+  Future<void> _confirmDelete(BuildContext context, ConvSummary conv) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Supprimer la conversation"),
+        content: Text(
+          "Supprimer « ${conv.title} » ?\nCette action est irréversible.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) onDelete(conv);
+  }
+
   Future<void> _logout(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -119,7 +142,7 @@ class ChatSidebar extends StatelessWidget {
                               size: 18,
                               color: Colors.grey,
                             ),
-                            onPressed: () => onDelete(conv),
+                            onPressed: () => _confirmDelete(context, conv),
                           ),
                         );
                       },
