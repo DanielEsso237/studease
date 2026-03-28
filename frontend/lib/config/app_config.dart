@@ -6,6 +6,9 @@ class AppConfig {
   static const String loginUrl = '$baseUrl/login';
   static const String chatUrl = '$baseUrl/chat';
   static const String conversationsUrl = '$baseUrl/conversations';
+  static const String accountUrl = '$baseUrl/account';
+  static const String accountUsernameUrl = '$baseUrl/account/username';
+  static const String accountPasswordUrl = '$baseUrl/account/password';
 
   static String messagesUrl(int convId) =>
       '$baseUrl/conversations/$convId/messages';

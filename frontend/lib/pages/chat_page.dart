@@ -374,6 +374,7 @@ class _ChatPageState extends State<ChatPage> {
                   onDelete: _deleteConversation,
                   onNewChat: _startNewChat,
                   onClose: _toggleSidebar,
+                  username: _username,
                 ),
               ),
             ),
