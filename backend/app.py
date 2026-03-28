@@ -2,7 +2,8 @@ from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
-import requests, json
+import requests
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -14,8 +15,10 @@ from langchain_core.documents import Document
 from db import db
 from routes.auth import auth_bp
 from routes.conversations import conv_bp
+from routes.account import account_bp
 from models.conversation import Conversation
 from models.message import Message
+
 
 load_dotenv()
 
@@ -42,9 +45,10 @@ JWTManager(app)
 
 with app.app_context():
     db.create_all()
-
+    
 app.register_blueprint(auth_bp)
 app.register_blueprint(conv_bp)
+app.register_blueprint(account_bp)
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not API_KEY:

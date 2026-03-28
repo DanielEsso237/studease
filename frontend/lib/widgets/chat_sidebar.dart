@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../pages/login_page.dart';
+import '../pages/account_page.dart';
 import '../models/conv_summary.dart';
 
 class ChatSidebar extends StatelessWidget {
@@ -10,6 +11,7 @@ class ChatSidebar extends StatelessWidget {
   final Function(ConvSummary) onDelete;
   final VoidCallback onNewChat;
   final VoidCallback onClose;
+  final String username;
 
   const ChatSidebar({
     super.key,
@@ -19,7 +21,23 @@ class ChatSidebar extends StatelessWidget {
     required this.onDelete,
     required this.onNewChat,
     required this.onClose,
+    required this.username,
   });
+
+  String get _initiale => username.isNotEmpty ? username[0].toUpperCase() : '?';
+
+  Color _avatarColor() {
+    final colors = [
+      Colors.indigo,
+      Colors.teal,
+      Colors.orange,
+      Colors.purple,
+      Colors.pink,
+      Colors.green,
+    ];
+    if (username.isEmpty) return Colors.grey;
+    return colors[username.codeUnitAt(0) % colors.length];
+  }
 
   Future<void> _confirmDelete(BuildContext context, ConvSummary conv) async {
     final confirm = await showDialog<bool>(
@@ -150,8 +168,40 @@ class ChatSidebar extends StatelessWidget {
             ),
 
             const Divider(height: 1),
+
+            ListTile(
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: _avatarColor(),
+                child: Text(
+                  _initiale,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              title: Text(
+                username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: const Text(
+                "Mon compte",
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                onClose();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AccountPage()),
+                );
+              },
+            ),
+
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: SizedBox(
                 width: double.infinity,
                 height: 45,
