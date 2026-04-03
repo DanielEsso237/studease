@@ -9,6 +9,7 @@ class ChatSidebar extends StatelessWidget {
   final int? selectedConvId;
   final Function(ConvSummary) onSelect;
   final Function(ConvSummary) onDelete;
+  final Function(ConvSummary, String) onRename;
   final VoidCallback onNewChat;
   final VoidCallback onClose;
   final String username;
@@ -19,6 +20,7 @@ class ChatSidebar extends StatelessWidget {
     required this.selectedConvId,
     required this.onSelect,
     required this.onDelete,
+    required this.onRename,
     required this.onNewChat,
     required this.onClose,
     required this.username,
@@ -37,6 +39,33 @@ class ChatSidebar extends StatelessWidget {
     ];
     if (username.isEmpty) return Colors.grey;
     return colors[username.codeUnitAt(0) % colors.length];
+  }
+
+  Future<void> _showRenameDialog(BuildContext context, ConvSummary conv) async {
+    final controller = TextEditingController(text: conv.title);
+    final confirm = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Renommer la conversation"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 100,
+          decoration: const InputDecoration(labelText: "Nouveau titre"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text("Renommer"),
+          ),
+        ],
+      ),
+    );
+    if (confirm != null && confirm.isNotEmpty) onRename(conv, confirm);
   }
 
   Future<void> _confirmDelete(BuildContext context, ConvSummary conv) async {
@@ -154,6 +183,7 @@ class ChatSidebar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           onTap: () => onSelect(conv),
+                          onLongPress: () => _showRenameDialog(context, conv),
                           trailing: IconButton(
                             icon: const Icon(
                               Icons.delete_outline,

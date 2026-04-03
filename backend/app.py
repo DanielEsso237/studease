@@ -2,8 +2,9 @@ from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
-import requests
-import json
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import requests, json, threading
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -19,12 +20,18 @@ from routes.account import account_bp
 from models.conversation import Conversation
 from models.message import Message
 
-
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 swagger = Swagger(app)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per hour"],
+    storage_uri="memory://"
+)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -45,7 +52,7 @@ JWTManager(app)
 
 with app.app_context():
     db.create_all()
-    
+
 app.register_blueprint(auth_bp)
 app.register_blueprint(conv_bp)
 app.register_blueprint(account_bp)
@@ -113,8 +120,49 @@ def load_or_create_vectorstore():
 load_or_create_vectorstore()
 
 
+def _generate_title(conv_id: int, user_message: str, assistant_message: str):
+    try:
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Donne un titre court (5 mots maximum) qui résume cette conversation. "
+                        "Réponds uniquement avec le titre, sans guillemets, sans ponctuation finale, "
+                        "sans explication.\n\n"
+                        f"User: {user_message}\n"
+                        f"Assistant: {assistant_message[:300]}"
+                    ),
+                }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 20,
+        }
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost",
+            "X-Title": "Studease Chat",
+        }
+        res   = requests.post(url, json=payload, headers=headers, timeout=15)
+        title = res.json()['choices'][0]['message']['content'].strip()
+        if title:
+            with app.app_context():
+                db.session.execute(
+                    db.update(Conversation)
+                    .where(Conversation.id == conv_id)
+                    .values(title=title)
+                )
+                db.session.commit()
+    except Exception:
+        pass
+
+
 @app.route('/chat', methods=['POST'])
 @jwt_required()
+@limiter.limit("30 per minute")
 def chat():
     """
     Envoie un message à Studease (RAG + streaming)
@@ -233,6 +281,7 @@ def chat():
             return jsonify({"response": answer, "conversation_id": conv.id})
 
         assistant_buffer = []
+        is_first_exchange = len(conv.messages) <= 2
 
         def generate():
             yield f"data: {json.dumps({'conversation_id': conv.id})}\n\n"
@@ -260,6 +309,14 @@ def chat():
                             .values(updated_at=datetime.utcnow())
                         )
                         db.session.commit()
+
+                    if is_first_exchange:
+                        threading.Thread(
+                            target=_generate_title,
+                            args=(conv.id, user_message, full_answer),
+                            daemon=True
+                        ).start()
+
                     yield 'data: [DONE]\n\n'
                     break
 

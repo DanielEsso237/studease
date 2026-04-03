@@ -1,4 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import '../pages/login_page.dart';
 
 class AuthService {
   static const _tokenKey = 'auth_token';
@@ -41,5 +43,15 @@ class AuthService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userNameKey);
     await prefs.remove(_userEmailKey);
+  }
+
+  static Future<void> handleUnauthorized(BuildContext context) async {
+    await logout();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
   }
 }

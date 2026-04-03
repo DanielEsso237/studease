@@ -17,6 +17,7 @@ class _AccountPageState extends State<AccountPage> {
   String _email = '';
   String _createdAt = '';
   bool _isLoading = true;
+  
   bool _isDark = false;
 
   @override
@@ -68,7 +69,7 @@ class _AccountPageState extends State<AccountPage> {
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: "Nouveau nom"),
-          autofocus: true,
+          autofocus: true
         ),
         actions: [
           TextButton(

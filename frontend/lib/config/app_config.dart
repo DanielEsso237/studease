@@ -13,4 +13,6 @@ class AppConfig {
   static String messagesUrl(int convId) =>
       '$baseUrl/conversations/$convId/messages';
   static String deleteConvUrl(int convId) => '$baseUrl/conversations/$convId';
+  static String renameConvUrl(int convId) =>
+      '$baseUrl/conversations/$convId/title';
 }
