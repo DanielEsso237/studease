@@ -8,11 +8,6 @@ import requests, json, threading
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-from pypdf import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
 from db import db
 from routes.auth import auth_bp
 from routes.conversations import conv_bp
@@ -74,52 +69,117 @@ Si tu ne connais pas la réponse exacte, tu le dis honnêtement et tu proposes d
 Tu es un système expert propulsé par intelligence artificielle au service exclusif de la communauté de la Faculté des Sciences de l'Université d'Ebolowa."""
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
-INDEX_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
-
-embeddings   = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-vector_store = None
+INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
+META_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.meta.json")
 
 MAX_HISTORY = 10
 
+# ── RAG : état partagé ─────────────────────────────────────────────────────
+vector_store      = None
+_rag_ready        = False          # True dès que le chargement est terminé
+_rag_lock         = threading.Lock()
 
-def load_or_create_vectorstore():
-    global vector_store
 
-    if os.path.exists(INDEX_PATH):
-        vector_store = FAISS.load_local(
-            INDEX_PATH, embeddings, allow_dangerous_deserialization=True
-        )
-        return
 
-    docs = []
 
+def _get_pdf_signatures() -> dict:
+    """Retourne {filename: taille_en_octets} pour tous les PDFs du dossier."""
+    sigs = {}
     if not os.path.exists(PDF_FOLDER):
-        return
+        return sigs
+    for f in os.listdir(PDF_FOLDER):
+        if f.lower().endswith(".pdf"):
+            sigs[f] = os.path.getsize(os.path.join(PDF_FOLDER, f))
+    return sigs
 
-    for filename in os.listdir(PDF_FOLDER):
-        if not filename.lower().endswith(".pdf"):
-            continue
-        path = os.path.join(PDF_FOLDER, filename)
-        try:
-            reader = PdfReader(path)
-            text = "".join(page.extract_text() or "" for page in reader.pages)
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=800, chunk_overlap=150, length_function=len
+
+def _index_is_stale() -> bool:
+    """Retourne True si l'index n'existe pas ou si les PDFs ont changé."""
+    if not os.path.exists(INDEX_PATH) or not os.path.exists(META_PATH):
+        return True
+    try:
+        with open(META_PATH, "r") as fh:
+            saved = json.load(fh)
+        return saved != _get_pdf_signatures()
+    except Exception:
+        return True
+
+
+def _save_meta():
+    os.makedirs(os.path.dirname(META_PATH), exist_ok=True)
+    with open(META_PATH, "w") as fh:
+        json.dump(_get_pdf_signatures(), fh)
+
+
+def _load_rag_background():
+    """Charge (ou recrée) le vector store dans un thread daemon.
+    Le serveur démarre immédiatement ; le RAG sera disponible
+    quelques secondes plus tard.
+    L'index est automatiquement reconstruit si des PDFs ont été
+    ajoutés, supprimés ou modifiés."""
+    global vector_store, _rag_ready
+
+    from pypdf import PdfReader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_community.vectorstores import FAISS
+    from langchain_core.documents import Document
+
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    try:
+        if not _index_is_stale():
+            # Index à jour → chargement direct, rapide
+            vs = FAISS.load_local(
+                INDEX_PATH, embeddings, allow_dangerous_deserialization=True
             )
-            for chunk in splitter.split_text(text):
-                docs.append(Document(page_content=chunk, metadata={"source": filename}))
-        except Exception:
-            pass
+            print("[RAG] Index chargé depuis le cache ✓")
+        else:
+            # Reconstruction nécessaire (nouveaux PDFs ou premier lancement)
+            print("[RAG] Changement détecté — reconstruction de l'index…")
+            docs = []
+            if os.path.exists(PDF_FOLDER):
+                for filename in os.listdir(PDF_FOLDER):
+                    if not filename.lower().endswith(".pdf"):
+                        continue
+                    path = os.path.join(PDF_FOLDER, filename)
+                    try:
+                        reader = PdfReader(path)
+                        text = "".join(page.extract_text() or "" for page in reader.pages)
+                        splitter = RecursiveCharacterTextSplitter(
+                            chunk_size=800, chunk_overlap=150, length_function=len
+                        )
+                        for chunk in splitter.split_text(text):
+                            docs.append(Document(page_content=chunk, metadata={"source": filename}))
+                        print(f"[RAG]   ✓ {filename}")
+                    except Exception as e:
+                        print(f"[RAG]   ✗ {filename} : {e}")
 
-    if docs:
-        os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
-        vector_store = FAISS.from_documents(docs, embeddings)
-        vector_store.save_local(INDEX_PATH)
+            if docs:
+                os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
+                vs = FAISS.from_documents(docs, embeddings)
+                vs.save_local(INDEX_PATH)
+                _save_meta()
+                print(f"[RAG] Index reconstruit avec {len(docs)} chunks ✓")
+            else:
+                vs = None
+                print("[RAG] Aucun PDF trouvé — RAG désactivé")
+
+        with _rag_lock:
+            vector_store = vs
+            _rag_ready   = True
+
+    except Exception as e:
+        print(f"[RAG] Erreur lors du chargement : {e}")
+        with _rag_lock:
+            _rag_ready = True
 
 
-load_or_create_vectorstore()
+# Lancement immédiat en arrière-plan — ne bloque plus le démarrage
+threading.Thread(target=_load_rag_background, daemon=True).start()
 
 
+# ── Génération de titre (inchangée) ───────────────────────────────────────
 def _generate_title(conv_id: int, user_message: str, assistant_message: str):
     try:
         payload = {
@@ -160,6 +220,7 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
         pass
 
 
+# ── Route /chat ────────────────────────────────────────────────────────────
 @app.route('/chat', methods=['POST'])
 @jwt_required()
 @limiter.limit("30 per minute")
@@ -221,9 +282,13 @@ def chat():
     ]
     history = raw_history[-MAX_HISTORY:]
 
+    # Lecture thread-safe du vector store (peut encore être None si RAG pas prêt)
+    with _rag_lock:
+        vs = vector_store
+
     context = ""
-    if vector_store:
-        results = vector_store.similarity_search(user_message, k=4)
+    if vs:
+        results = vs.similarity_search(user_message, k=4)
         raw_ctx = "\n\n".join(doc.page_content for doc in results)
         if raw_ctx.strip():
             context = (
