@@ -1,4 +1,0 @@
-backend/rag/index.faiss/
-backend/rag/index.meta.json
-backend/**/__pycache__/
-backend/**/*.pyc

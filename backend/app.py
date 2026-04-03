@@ -74,9 +74,9 @@ META_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.meta.json")
 
 MAX_HISTORY = 10
 
-# ── RAG : état partagé ─────────────────────────────────────────────────────
+
 vector_store      = None
-_rag_ready        = False          # True dès que le chargement est terminé
+_rag_ready        = False         
 _rag_lock         = threading.Lock()
 
 
@@ -129,13 +129,12 @@ def _load_rag_background():
 
     try:
         if not _index_is_stale():
-            # Index à jour → chargement direct, rapide
             vs = FAISS.load_local(
                 INDEX_PATH, embeddings, allow_dangerous_deserialization=True
             )
             print("[RAG] Index chargé depuis le cache ✓")
         else:
-            # Reconstruction nécessaire (nouveaux PDFs ou premier lancement)
+        
             print("[RAG] Changement détecté — reconstruction de l'index…")
             docs = []
             if os.path.exists(PDF_FOLDER):
@@ -175,11 +174,10 @@ def _load_rag_background():
             _rag_ready = True
 
 
-# Lancement immédiat en arrière-plan — ne bloque plus le démarrage
+
 threading.Thread(target=_load_rag_background, daemon=True).start()
 
 
-# ── Génération de titre (inchangée) ───────────────────────────────────────
 def _generate_title(conv_id: int, user_message: str, assistant_message: str):
     try:
         payload = {
@@ -220,7 +218,6 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
         pass
 
 
-# ── Route /chat ────────────────────────────────────────────────────────────
 @app.route('/chat', methods=['POST'])
 @jwt_required()
 @limiter.limit("30 per minute")
@@ -403,4 +400,4 @@ def chat():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
