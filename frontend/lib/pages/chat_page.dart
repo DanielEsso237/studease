@@ -68,6 +68,11 @@ class _ChatPageState extends State<ChatPage> {
             headers: {'Authorization': auth},
           )
           .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 401) {
+        await AuthService.handleUnauthorized(context);
+        return;
+      }
       if (res.statusCode == 200) {
         final List list = jsonDecode(res.body);
         if (mounted) {
@@ -90,6 +95,10 @@ class _ChatPageState extends State<ChatPage> {
           )
           .timeout(const Duration(seconds: 10));
 
+      if (res.statusCode == 401) {
+        await AuthService.handleUnauthorized(context);
+        return;
+      }
       if (res.statusCode == 200) {
         final List list = jsonDecode(res.body);
         if (mounted) {
@@ -127,6 +136,17 @@ class _ChatPageState extends State<ChatPage> {
         _currentConvId = null;
       });
     }
+    _fetchConversations();
+  }
+
+  Future<void> _renameConversation(ConvSummary conv, String newTitle) async {
+    final auth = await _authHeader();
+    if (auth == null) return;
+    await http.put(
+      Uri.parse(AppConfig.renameConvUrl(conv.id)),
+      headers: {'Authorization': auth, 'Content-Type': 'application/json'},
+      body: jsonEncode({'title': newTitle}),
+    );
     _fetchConversations();
   }
 
@@ -186,8 +206,13 @@ class _ChatPageState extends State<ChatPage> {
       });
 
       final response = await request.send();
-      if (response.statusCode != 200)
+      if (response.statusCode == 401) {
+        await AuthService.handleUnauthorized(context);
+        return;
+      }
+      if (response.statusCode != 200) {
         throw Exception('Erreur ${response.statusCode}');
+      }
 
       String buffer = '';
 
@@ -372,6 +397,7 @@ class _ChatPageState extends State<ChatPage> {
                   selectedConvId: _currentConvId,
                   onSelect: _loadConversation,
                   onDelete: _deleteConversation,
+                  onRename: _renameConversation,
                   onNewChat: _startNewChat,
                   onClose: _toggleSidebar,
                   username: _username,

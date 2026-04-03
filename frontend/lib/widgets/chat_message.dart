@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 class ChatMessage extends StatelessWidget {
   final String text;
@@ -22,70 +23,97 @@ class ChatMessage extends StatelessWidget {
     );
   }
 
+  void _copyToClipboard(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Message copié"),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (text.isEmpty)
-      return const SizedBox.shrink(); // ← fix : cache le message vide
+    if (text.isEmpty) return const SizedBox.shrink();
 
     if (isUser) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
+      return GestureDetector(
+        onLongPress: () => _copyToClipboard(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffE5E5EA),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text(text, style: const TextStyle(fontSize: 15)),
                 ),
-                decoration: BoxDecoration(
-                  color: const Color(0xffE5E5EA),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Text(text, style: const TextStyle(fontSize: 15)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _botAvatar(),
-          const SizedBox(width: 10),
-          Expanded(
-            child: MarkdownBody(
-              data: text,
-              styleSheet: MarkdownStyleSheet(
-                p: const TextStyle(fontSize: 15, height: 1.5),
-                strong: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onLongPress: () => _copyToClipboard(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _botAvatar(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: MarkdownBody(
+                data: text,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(fontSize: 15, height: 1.5),
+                  strong: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  em: const TextStyle(
+                    fontSize: 15,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  h1: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  h2: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  h3: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  listBullet: const TextStyle(fontSize: 15, height: 1.5),
+                  code: TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    backgroundColor: Colors.grey.shade200,
+                  ),
+                  codeblockDecoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                em: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic),
-                h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                listBullet: const TextStyle(fontSize: 15, height: 1.5),
-                code: TextStyle(
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  backgroundColor: Colors.grey.shade200,
-                ),
-                codeblockDecoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                shrinkWrap: true,
               ),
-              shrinkWrap: true,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
