@@ -17,7 +17,7 @@ class _AccountPageState extends State<AccountPage> {
   String _email = '';
   String _createdAt = '';
   bool _isLoading = true;
-  
+
   bool _isDark = false;
 
   @override
@@ -69,7 +69,7 @@ class _AccountPageState extends State<AccountPage> {
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: "Nouveau nom"),
-          autofocus: true
+          autofocus: true,
         ),
         actions: [
           TextButton(
@@ -204,6 +204,48 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteAllConversationsDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Effacer toutes les discussions"),
+        content: const Text(
+          "Cette action supprimera définitivement toutes tes conversations et tous les messages qu'elles contiennent.\n\nElle est irréversible.",
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final error = await AccountService.deleteAllConversations();
+              if (!mounted) return;
+              if (error == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Toutes les discussions ont été supprimées"),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(error), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text(
+              "Tout supprimer",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -406,6 +448,20 @@ class _AccountPageState extends State<AccountPage> {
                       },
                     ),
                     onTap: null,
+                  ),
+                ]),
+
+                _buildSection("Gestion des données", [
+                  _buildTile(
+                    icon: Icons.delete_sweep_outlined,
+                    label: "Effacer toutes les discussions",
+                    iconColor: Colors.orange.shade700,
+                    labelColor: Colors.orange.shade700,
+                    trailingWidget: Icon(
+                      Icons.chevron_right,
+                      color: Colors.orange.shade700,
+                    ),
+                    onTap: _showDeleteAllConversationsDialog,
                   ),
                 ]),
 
