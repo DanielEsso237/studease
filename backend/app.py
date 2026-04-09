@@ -56,17 +56,27 @@ API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'est pas définie dans .env")
 
-MODEL = "stepfun/step-3.5-flash:free"
+MODEL = "google/gemma-4-26b-a4b-it:free"
 
-SYSTEM_PROMPT_BASE = """Tu es Studease, l'assistant intelligent officiel et expert de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
+SYSTEM_PROMPT_BASE = """Tu es Studease, l'assistant officiel et bienveillant de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
 
-Ton rôle principal est d'aider les étudiants, les enseignants et le personnel administratif dans toutes leurs préoccupations liées à la faculté : inscriptions, programmes académiques, emplois du temps, procédures administratives, services, bourses, événements, règles internes, orientation, stages, etc.
+Tu accompagnes chaleureusement les étudiants, enseignants et le personnel administratif sur tout ce qui touche à la faculté : inscriptions, programmes, emplois du temps, procédures administratives, services, bourses, événements, règlement intérieur, orientation, stages, et bien plus encore.
 
-Tu réponds toujours en français, de façon claire, précise, amicale et encourageante. 
-Tu es patient, pédagogique et tu donnes des réponses structurées quand c'est utile.
-Si tu ne connais pas la réponse exacte, tu le dis honnêtement et tu proposes des solutions (contacter le secrétariat, consulter le site officiel, etc.).
+Tu as une personnalité amicale, patiente et encourageante. Tu t'adresses à l'utilisateur de façon naturelle et humaine, comme un conseiller de confiance qui connaît parfaitement la faculté.
 
-Tu es un système expert propulsé par intelligence artificielle au service exclusif de la communauté de la Faculté des Sciences de l'Université d'Ebolowa."""
+RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
+
+1. Tu bases TOUJOURS tes réponses exclusivement sur les informations du contexte fourni. Tu ne complètes jamais avec des suppositions ou des connaissances extérieures.
+
+2. Quand le contexte contient la réponse, tu la formules de façon claire, structurée et chaleureuse — comme si c'était une connaissance naturelle que tu as de la faculté. Tu ne mentionnes jamais l'existence de "documents", "extraits" ou "contexte".
+
+3. Quand le contexte ne contient pas la réponse, tu le dis honnêtement mais avec bienveillance, par exemple : "Je n'ai pas encore cette information, mais je te conseille de contacter le secrétariat de la faculté ou de consulter le site officiel de l'Université d'Ebolowa — ils pourront t'aider rapidement 😊"
+
+4. Tu ne réponds qu'aux questions qui concernent la Faculté des Sciences de l'Université d'Ebolowa. Si quelqu'un te demande autre chose, tu rappelles gentiment ton rôle : "Je suis dédié à la Faculté des Sciences de l'Université d'Ebolowa, donc je ne peux pas t'aider sur ce sujet — mais pour tout ce qui concerne la fac, je suis là !"
+
+5. Tu n'inventes jamais de noms, de dates, de chiffres, de procédures ou de règles. Si une information n'est pas dans le contexte, elle n'existe pas pour toi.
+
+6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles."""
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -74,16 +84,12 @@ META_PATH  = os.path.join(os.path.dirname(__file__), "rag", "index.meta.json")
 
 MAX_HISTORY = 10
 
-
-vector_store      = None
-_rag_ready        = False         
-_rag_lock         = threading.Lock()
-
-
+vector_store = None
+_rag_ready   = False
+_rag_lock    = threading.Lock()
 
 
 def _get_pdf_signatures() -> dict:
-    """Retourne {filename: taille_en_octets} pour tous les PDFs du dossier."""
     sigs = {}
     if not os.path.exists(PDF_FOLDER):
         return sigs
@@ -94,7 +100,6 @@ def _get_pdf_signatures() -> dict:
 
 
 def _index_is_stale() -> bool:
-    """Retourne True si l'index n'existe pas ou si les PDFs ont changé."""
     if not os.path.exists(INDEX_PATH) or not os.path.exists(META_PATH):
         return True
     try:
@@ -112,11 +117,6 @@ def _save_meta():
 
 
 def _load_rag_background():
-    """Charge (ou recrée) le vector store dans un thread daemon.
-    Le serveur démarre immédiatement ; le RAG sera disponible
-    quelques secondes plus tard.
-    L'index est automatiquement reconstruit si des PDFs ont été
-    ajoutés, supprimés ou modifiés."""
     global vector_store, _rag_ready
 
     from pypdf import PdfReader
@@ -125,7 +125,9 @@ def _load_rag_background():
     from langchain_community.vectorstores import FAISS
     from langchain_core.documents import Document
 
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
     try:
         if not _index_is_stale():
@@ -134,7 +136,6 @@ def _load_rag_background():
             )
             print("[RAG] Index chargé depuis le cache ✓")
         else:
-        
             print("[RAG] Changement détecté — reconstruction de l'index…")
             docs = []
             if os.path.exists(PDF_FOLDER):
@@ -144,12 +145,19 @@ def _load_rag_background():
                     path = os.path.join(PDF_FOLDER, filename)
                     try:
                         reader = PdfReader(path)
-                        text = "".join(page.extract_text() or "" for page in reader.pages)
+                        text = "".join(
+                            page.extract_text() or "" for page in reader.pages
+                        )
                         splitter = RecursiveCharacterTextSplitter(
                             chunk_size=800, chunk_overlap=150, length_function=len
                         )
                         for chunk in splitter.split_text(text):
-                            docs.append(Document(page_content=chunk, metadata={"source": filename}))
+                            docs.append(
+                                Document(
+                                    page_content=chunk,
+                                    metadata={"source": filename},
+                                )
+                            )
                         print(f"[RAG]   ✓ {filename}")
                     except Exception as e:
                         print(f"[RAG]   ✗ {filename} : {e}")
@@ -169,10 +177,11 @@ def _load_rag_background():
             _rag_ready   = True
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[RAG] Erreur lors du chargement : {e}")
         with _rag_lock:
             _rag_ready = True
-
 
 
 threading.Thread(target=_load_rag_background, daemon=True).start()
@@ -218,39 +227,26 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
         pass
 
 
+@app.route('/status', methods=['GET'])
+@limiter.limit("60 per minute")
+def status():
+    with _rag_lock:
+        ready = _rag_ready
+    return jsonify({"ready": ready}), 200
+
+
 @app.route('/chat', methods=['POST'])
 @jwt_required()
 @limiter.limit("30 per minute")
 def chat():
-    """
-    Envoie un message à Studease (RAG + streaming)
-    ---
-    tags:
-      - Chat
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            conversation_id:
-              type: integer
-            stream:
-              type: boolean
-              default: true
-    responses:
-      200:
-        description: Réponse streamée ou JSON
-      400:
-        description: Message manquant
-      404:
-        description: Conversation introuvable
-      500:
-        description: Erreur serveur
-    """
+    with _rag_lock:
+        rag_ready = _rag_ready
+
+    if not rag_ready:
+        return jsonify({
+            "error": "Le système démarre, merci de patienter quelques secondes et de réessayer."
+        }), 503
+
     user_id = int(get_jwt_identity())
     data    = request.get_json()
     if not data or 'message' not in data:
@@ -279,28 +275,34 @@ def chat():
     ]
     history = raw_history[-MAX_HISTORY:]
 
-    # Lecture thread-safe du vector store (peut encore être None si RAG pas prêt)
     with _rag_lock:
         vs = vector_store
 
     context = ""
     if vs:
-        results = vs.similarity_search(user_message, k=4)
-        raw_ctx = "\n\n".join(doc.page_content for doc in results)
-        if raw_ctx.strip():
+        results = vs.similarity_search_with_score(user_message, k=4)
+        relevant = [doc for doc, score in results if score < 1.0]
+
+        if relevant:
+            raw_ctx = "\n\n".join(doc.page_content for doc in relevant)
             context = (
-                "Voici des extraits de ta base de connaissance interne sur la Faculté des Sciences "
-                "de l'Université d'Ebolowa. Ces informations font partie de tes données officielles "
-                "et tu peux les présenter comme telles, sans mentionner qu'elles proviennent de "
-                "documents partagés par l'utilisateur :\n\n"
+                "Voici les informations officielles disponibles pour répondre à cette question :\n\n"
                 + raw_ctx
-                + "\n\nUtilise ces informations pour répondre de manière précise et factuelle. "
-                "Présente toujours les informations comme faisant partie de ta connaissance "
-                "de la faculté. Si le contexte ne contient pas la réponse, dis-le honnêtement "
-                "sans faire référence à des documents ou extraits."
+                + "\n\n---\n"
+                "Utilise uniquement ces informations pour formuler ta réponse, "
+                "de façon naturelle et chaleureuse. "
+                "Si elles ne permettent pas de répondre précisément, dis-le honnêtement "
+                "sans rien inventer, et oriente l'utilisateur vers le secrétariat ou le site officiel."
+            )
+        else:
+            context = (
+                "Aucune information pertinente n'est disponible pour cette question. "
+                "Tu dois le signaler à l'utilisateur avec bienveillance et l'orienter "
+                "vers le secrétariat de la faculté ou le site officiel de l'Université d'Ebolowa. "
+                "N'invente aucune information."
             )
 
-    full_system_prompt = SYSTEM_PROMPT_BASE + ("\n\n" + context if context else "")
+    full_system_prompt = SYSTEM_PROMPT_BASE + "\n\n" + context
 
     payload = {
         "model": MODEL,
@@ -310,7 +312,7 @@ def chat():
             {"role": "user", "content": user_message},
         ],
         "stream":      stream_requested,
-        "temperature": 0.65,
+        "temperature": 0.2,
         "max_tokens":  1200,
     }
 
@@ -327,6 +329,11 @@ def chat():
             url, json=payload, headers=headers,
             stream=stream_requested, timeout=90
         )
+
+        if resp.status_code != 200:
+            error_text = resp.text[:800]
+            print(f"[OpenRouter ERROR] Status {resp.status_code} - {error_text}")
+            return jsonify({"error": f"OpenRouter error {resp.status_code}"}), resp.status_code
 
         if not stream_requested:
             resp.raise_for_status()
@@ -396,7 +403,13 @@ def chat():
 
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
+        print(f"[Request ERROR] {error_text}")
         return jsonify({"error": f"Erreur OpenRouter: {error_text}"}), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Erreur interne serveur: {str(e)}"}), 500
 
 
 if __name__ == '__main__':

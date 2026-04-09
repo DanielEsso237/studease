@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import '../models/conv_summary.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
+
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
@@ -24,8 +26,12 @@ class _ChatPageState extends State<ChatPage> {
   final List<Map<String, String>> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
   bool _isLoading = false;
   bool _showSidebar = false;
+  bool _systemReady = false;
+
+  Timer? _statusTimer;
 
   String _username = '';
   late String _greeting;
@@ -46,6 +52,24 @@ class _ChatPageState extends State<ChatPage> {
     _greeting = _greetings[Random().nextInt(_greetings.length)];
     _loadUsername();
     _fetchConversations();
+    _pollStatus();
+  }
+
+  Future<void> _pollStatus() async {
+    _statusTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        final res = await http
+            .get(Uri.parse(AppConfig.statusUrl))
+            .timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body);
+          if (body['ready'] == true && mounted) {
+            setState(() => _systemReady = true);
+            _statusTimer?.cancel();
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _loadUsername() async {
@@ -176,7 +200,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || !_systemReady) return;
 
     FocusScope.of(context).unfocus();
     _controller.clear();
@@ -206,12 +230,37 @@ class _ChatPageState extends State<ChatPage> {
       });
 
       final response = await request.send();
+
       if (response.statusCode == 401) {
         await AuthService.handleUnauthorized(context);
         return;
       }
+
+      if (response.statusCode == 503) {
+        setState(() {
+          _messages.removeLast();
+          _messages.removeLast();
+          _isLoading = false;
+          _systemReady = false;
+        });
+        _controller.text = text;
+        _pollStatus();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Système en cours de démarrage, patiente un instant…",
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       if (response.statusCode != 200) {
-        throw Exception('Erreur ${response.statusCode}');
+        final body = await response.stream.bytesToString();
+        throw Exception('Erreur ${response.statusCode} - ${body}');
       }
 
       String buffer = '';
@@ -221,40 +270,44 @@ class _ChatPageState extends State<ChatPage> {
           .listen(
             (chunk) {
               buffer += chunk;
-              while (true) {
-                final lb = buffer.indexOf('\n');
-                if (lb == -1) break;
-                final line = buffer.substring(0, lb).trim();
-                buffer = buffer.substring(lb + 1);
 
-                if (line.isEmpty || !line.startsWith('data: ')) continue;
-                final data = line.substring(6).trim();
+              while (buffer.contains('\n\n')) {
+                final idx = buffer.indexOf('\n\n');
+                final event = buffer.substring(0, idx).trim();
+                buffer = buffer.substring(idx + 2);
+
+                if (event.isEmpty || !event.startsWith('data: ')) continue;
+
+                final data = event.substring(6).trim();
 
                 if (data == '[DONE]') {
-                  setState(() => _isLoading = false);
-                  _scrollToBottom();
-                  _fetchConversations();
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    _scrollToBottom();
+                    _fetchConversations();
+                  }
                   return;
                 }
 
                 try {
-                  final json = jsonDecode(data);
+                  final parsed = jsonDecode(data);
 
-                  if (json.containsKey('conversation_id') &&
-                      _currentConvId == null) {
-                    _currentConvId = json['conversation_id'] as int;
-                    return;
+                  if (parsed is Map && parsed.containsKey('conversation_id')) {
+                    if (_currentConvId == null) {
+                      _currentConvId = parsed['conversation_id'] as int;
+                    }
+                    continue;
                   }
 
                   final delta =
-                      json['choices']?[0]?['delta']?['content'] as String?;
-                  if (delta != null && delta.isNotEmpty) {
+                      parsed['choices']?[0]?['delta']?['content'] as String?;
+                  if (delta != null && delta.isNotEmpty && mounted) {
                     setState(() {
+                      final current =
+                          _messages[newAssistantIndex]['content'] ?? '';
                       _messages[newAssistantIndex] = {
                         'role': 'assistant',
-                        'content':
-                            (_messages[newAssistantIndex]['content'] ?? '') +
-                            delta,
+                        'content': current + delta,
                       };
                     });
                     _scrollToBottom();
@@ -263,29 +316,35 @@ class _ChatPageState extends State<ChatPage> {
               }
             },
             onDone: () {
-              setState(() => _isLoading = false);
-              _scrollToBottom();
-              _fetchConversations();
+              if (mounted) {
+                setState(() => _isLoading = false);
+                _scrollToBottom();
+                _fetchConversations();
+              }
             },
             onError: (error) {
-              setState(() {
-                _messages[newAssistantIndex] = {
-                  'role': 'assistant',
-                  'content': 'Erreur : $error',
-                };
-                _isLoading = false;
-              });
+              if (mounted) {
+                setState(() {
+                  _messages[newAssistantIndex] = {
+                    'role': 'assistant',
+                    'content': 'Erreur : $error',
+                  };
+                  _isLoading = false;
+                });
+              }
             },
             cancelOnError: true,
           );
     } catch (e) {
-      setState(() {
-        _messages[newAssistantIndex] = {
-          'role': 'assistant',
-          'content': 'Erreur de connexion : $e',
-        };
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _messages[newAssistantIndex] = {
+            'role': 'assistant',
+            'content': 'Erreur de connexion : $e',
+          };
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -373,7 +432,11 @@ class _ChatPageState extends State<ChatPage> {
                         },
                       ),
               ),
-              ChatInput(controller: _controller, onSend: _sendMessage),
+              ChatInput(
+                controller: _controller,
+                onSend: _sendMessage,
+                isReady: _systemReady,
+              ),
             ],
           ),
 
@@ -411,6 +474,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();

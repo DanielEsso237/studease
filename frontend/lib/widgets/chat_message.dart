@@ -1,4 +1,3 @@
-// frontend/lib/widgets/chat_message.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -59,7 +58,6 @@ class ChatMessage extends StatelessWidget {
       );
     }
 
-    // Message du bot
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
@@ -73,40 +71,67 @@ class ChatMessage extends StatelessWidget {
               children: [
                 MarkdownBody(
                   data: text,
-                  styleSheet: MarkdownStyleSheet(
-                    p: const TextStyle(fontSize: 15, height: 1.5),
-                    strong: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    em: const TextStyle(
-                      fontSize: 15,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    h1: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    h2: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    h3: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    listBullet: const TextStyle(fontSize: 15, height: 1.5),
-                    code: TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      backgroundColor: Colors.grey.shade200,
-                    ),
-                    codeblockDecoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
                   shrinkWrap: true,
+                  softLineBreak: true,
+                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
+                      .copyWith(
+                        p: const TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                        strong: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        em: const TextStyle(
+                          fontSize: 15,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                        ),
+                        h1: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        h2: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        h3: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        listBullet: const TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                        blockquote: const TextStyle(
+                          fontSize: 15,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black54,
+                        ),
+                        code: TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                          backgroundColor: Colors.grey.shade200,
+                          color: Colors.pink.shade700,
+                        ),
+                        codeblockDecoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        blockSpacing: 8,
+                        listIndent: 20,
+                        h1Padding: const EdgeInsets.only(top: 8, bottom: 4),
+                        h2Padding: const EdgeInsets.only(top: 6, bottom: 4),
+                        h3Padding: const EdgeInsets.only(top: 4, bottom: 2),
+                      ),
                 ),
                 const SizedBox(height: 6),
                 _CopyButton(onTap: () => _copyToClipboard(context)),
