@@ -30,7 +30,7 @@ def create_conversation():
     return jsonify(conv.to_dict()), 201
 
 
-# ⚠️ Cette route DOIT être avant /conversations/<int:conv_id>
+
 @conv_bp.route('/conversations/delete-all', methods=['DELETE'])
 @jwt_required()
 def delete_all_conversations():
