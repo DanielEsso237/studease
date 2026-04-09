@@ -17,7 +17,6 @@ class _AccountPageState extends State<AccountPage> {
   String _email = '';
   String _createdAt = '';
   bool _isLoading = true;
-
   bool _isDark = false;
 
   @override
@@ -32,9 +31,7 @@ class _AccountPageState extends State<AccountPage> {
       final raw = data['created_at'] as String;
       final date = DateTime.tryParse(raw);
       final formatted = date != null
-          ? '${date.day.toString().padLeft(2, '0')}/'
-                '${date.month.toString().padLeft(2, '0')}/'
-                '${date.year}'
+          ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}'
           : raw;
       setState(() {
         _name = data['name'] ?? '';
@@ -234,6 +231,7 @@ class _AccountPageState extends State<AccountPage> {
                     backgroundColor: Colors.green,
                   ),
                 );
+                Navigator.pop(context, 'refresh');
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(error), backgroundColor: Colors.red),
@@ -420,7 +418,6 @@ class _AccountPageState extends State<AccountPage> {
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
                 ),
-
                 _buildSection("Profil", [
                   _buildTile(
                     icon: Icons.edit_outlined,
@@ -433,7 +430,6 @@ class _AccountPageState extends State<AccountPage> {
                     onTap: _showChangePasswordDialog,
                   ),
                 ]),
-
                 _buildSection("Préférences", [
                   _buildTile(
                     icon: Icons.dark_mode_outlined,
@@ -450,7 +446,6 @@ class _AccountPageState extends State<AccountPage> {
                     onTap: null,
                   ),
                 ]),
-
                 _buildSection("Gestion des données", [
                   _buildTile(
                     icon: Icons.delete_sweep_outlined,
@@ -464,7 +459,6 @@ class _AccountPageState extends State<AccountPage> {
                     onTap: _showDeleteAllConversationsDialog,
                   ),
                 ]),
-
                 _buildSection("À propos", [
                   _buildTile(
                     icon: Icons.info_outline,
@@ -481,7 +475,6 @@ class _AccountPageState extends State<AccountPage> {
                     },
                   ),
                 ]),
-
                 _buildSection("Supprimer mon compte", [
                   _buildTile(
                     icon: Icons.delete_forever_outlined,
@@ -495,7 +488,6 @@ class _AccountPageState extends State<AccountPage> {
                     onTap: _showDeleteAccountDialog,
                   ),
                 ]),
-
                 const SizedBox(height: 40),
               ],
             ),
