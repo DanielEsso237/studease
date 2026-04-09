@@ -52,11 +52,12 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(conv_bp)
 app.register_blueprint(account_bp)
 
-API_KEY = os.getenv("OPENROUTER_API_KEY")
-if not API_KEY:
-    raise ValueError("OPENROUTER_API_KEY n'est pas définie dans .env")
 
-MODEL = "google/gemma-4-26b-a4b-it:free"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY n'est pas définie dans .env")
+
+MODEL = "llama-3.3-70b-versatile"
 
 SYSTEM_PROMPT_BASE = """Tu es Studease, l'assistant officiel et bienveillant de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
 
@@ -76,7 +77,9 @@ RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
 
 5. Tu n'inventes jamais de noms, de dates, de chiffres, de procédures ou de règles. Si une information n'est pas dans le contexte, elle n'existe pas pour toi.
 
-6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles."""
+6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles. Tu utilises le markdown pour structurer tes réponses quand c'est utile : **gras** pour les points importants, *italique* pour les nuances, des listes à puces ou numérotées pour énumérer, des titres (##) pour les sections. Pour les réponses courtes et simples, le markdown n'est pas nécessaire."""
+
+
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -206,14 +209,12 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
             "temperature": 0.3,
             "max_tokens": 20,
         }
-        url = "https://openrouter.ai/api/v1/chat/completions"
+        url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
-            "Authorization": f"Bearer {API_KEY}",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "Studease Chat",
         }
-        res   = requests.post(url, json=payload, headers=headers, timeout=15)
+        res = requests.post(url, json=payload, headers=headers, timeout=15)
         title = res.json()['choices'][0]['message']['content'].strip()
         if title:
             with app.app_context():
@@ -248,12 +249,12 @@ def chat():
         }), 503
 
     user_id = int(get_jwt_identity())
-    data    = request.get_json()
+    data = request.get_json()
     if not data or 'message' not in data:
         return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
 
-    user_message     = data['message']
-    conv_id          = data.get('conversation_id')
+    user_message = data['message']
+    conv_id = data.get('conversation_id')
     stream_requested = data.get('stream', True)
 
     if conv_id:
@@ -262,7 +263,7 @@ def chat():
             return jsonify({"error": "Conversation introuvable"}), 404
     else:
         title = user_message[:60] + ("…" if len(user_message) > 60 else "")
-        conv  = Conversation(user_id=user_id, title=title)
+        conv = Conversation(user_id=user_id, title=title)
         db.session.add(conv)
         db.session.commit()
 
@@ -311,17 +312,15 @@ def chat():
             *history,
             {"role": "user", "content": user_message},
         ],
-        "stream":      stream_requested,
+        "stream": stream_requested,
         "temperature": 0.2,
-        "max_tokens":  1200,
+        "max_tokens": 1200,
     }
 
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type":  "application/json",
-        "HTTP-Referer":  "http://localhost",
-        "X-Title":       "Studease Chat",
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
     }
 
     try:
@@ -332,8 +331,8 @@ def chat():
 
         if resp.status_code != 200:
             error_text = resp.text[:800]
-            print(f"[OpenRouter ERROR] Status {resp.status_code} - {error_text}")
-            return jsonify({"error": f"OpenRouter error {resp.status_code}"}), resp.status_code
+            print(f"[Groq ERROR] Status {resp.status_code} - {error_text}")
+            return jsonify({"error": f"Groq error {resp.status_code}"}), resp.status_code
 
         if not stream_requested:
             resp.raise_for_status()
@@ -391,7 +390,7 @@ def chat():
 
                 try:
                     parsed = json.loads(payload_str)
-                    delta  = parsed['choices'][0]['delta'].get('content', '')
+                    delta = parsed['choices'][0]['delta'].get('content', '')
                     if delta:
                         assistant_buffer.append(delta)
                 except Exception:
@@ -404,7 +403,7 @@ def chat():
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
         print(f"[Request ERROR] {error_text}")
-        return jsonify({"error": f"Erreur OpenRouter: {error_text}"}), 500
+        return jsonify({"error": f"Erreur Groq: {error_text}"}), 500
 
     except Exception as e:
         import traceback
