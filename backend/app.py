@@ -282,7 +282,9 @@ def chat():
     context = ""
     if vs:
         results = vs.similarity_search_with_score(user_message, k=4)
-        relevant = [doc for doc, score in results if score < 1.0]
+        for doc, score in results:
+          print(f"[RAG] score={score:.4f} | {doc.page_content[:80]}")
+        relevant = [doc for doc, score in results if score < 1.5]
 
         if relevant:
             raw_ctx = "\n\n".join(doc.page_content for doc in relevant)
