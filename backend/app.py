@@ -14,6 +14,11 @@ from routes.conversations import conv_bp
 from routes.account import account_bp
 from models.conversation import Conversation
 from models.message import Message
+from pypdf import PdfReader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 
 load_dotenv()
 
@@ -123,13 +128,6 @@ def _save_meta():
 
 def _load_rag_background():
     global vector_store, _rag_ready
-
-    from pypdf import PdfReader
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_community.vectorstores import FAISS
-    from langchain_core.documents import Document
-
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
