@@ -92,7 +92,6 @@ class _ChatPageState extends State<ChatPage> {
             headers: {'Authorization': auth},
           )
           .timeout(const Duration(seconds: 10));
-
       if (res.statusCode == 401) {
         await AuthService.handleUnauthorized(context);
         return;
@@ -118,7 +117,6 @@ class _ChatPageState extends State<ChatPage> {
             headers: {'Authorization': auth},
           )
           .timeout(const Duration(seconds: 10));
-
       if (res.statusCode == 401) {
         await AuthService.handleUnauthorized(context);
         return;
@@ -260,7 +258,7 @@ class _ChatPageState extends State<ChatPage> {
 
       if (response.statusCode != 200) {
         final body = await response.stream.bytesToString();
-        throw Exception('Erreur ${response.statusCode} - ${body}');
+        throw Exception('Erreur ${response.statusCode} - $body');
       }
 
       String buffer = '';
@@ -270,7 +268,6 @@ class _ChatPageState extends State<ChatPage> {
           .listen(
             (chunk) {
               buffer += chunk;
-
               while (buffer.contains('\n\n')) {
                 final idx = buffer.indexOf('\n\n');
                 final event = buffer.substring(0, idx).trim();
@@ -291,14 +288,12 @@ class _ChatPageState extends State<ChatPage> {
 
                 try {
                   final parsed = jsonDecode(data);
-
                   if (parsed is Map && parsed.containsKey('conversation_id')) {
                     if (_currentConvId == null) {
                       _currentConvId = parsed['conversation_id'] as int;
                     }
                     continue;
                   }
-
                   final delta =
                       parsed['choices']?[0]?['delta']?['content'] as String?;
                   if (delta != null && delta.isNotEmpty && mounted) {
@@ -420,14 +415,12 @@ class _ChatPageState extends State<ChatPage> {
                         padding: const EdgeInsets.only(bottom: 8),
                         itemCount: _messages.length + (_isLoading ? 1 : 0),
                         itemBuilder: (context, index) {
-                          if (index == _messages.length) {
+                          if (index == _messages.length)
                             return const ThinkingIndicator();
-                          }
                           final msg = _messages[index];
-                          final isUser = msg['role'] == 'user';
                           return ChatMessage(
                             text: msg['content'] ?? '',
-                            isUser: isUser,
+                            isUser: msg['role'] == 'user',
                           );
                         },
                       ),
@@ -439,7 +432,6 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ],
           ),
-
           if (_showSidebar)
             Positioned.fill(
               child: GestureDetector(
@@ -447,7 +439,6 @@ class _ChatPageState extends State<ChatPage> {
                 child: Container(color: Colors.black.withOpacity(0.4)),
               ),
             ),
-
           if (_showSidebar)
             Positioned(
               top: 0,
@@ -463,6 +454,7 @@ class _ChatPageState extends State<ChatPage> {
                   onRename: _renameConversation,
                   onNewChat: _startNewChat,
                   onClose: _toggleSidebar,
+                  onRefresh: _fetchConversations,
                   username: _username,
                 ),
               ),

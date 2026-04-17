@@ -62,4 +62,22 @@ class AccountService {
     final body = jsonDecode(res.body);
     return body['error'] ?? 'Erreur inconnue';
   }
+
+  /// Supprime toutes les conversations de l'utilisateur connecté.
+  /// Retourne null si succès, sinon le message d'erreur.
+  static Future<String?> deleteAllConversations() async {
+    final res = await http
+        .delete(
+          Uri.parse(AppConfig.conversationsAllUrl),
+          headers: await _headers(),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) return null;
+    try {
+      final body = jsonDecode(res.body);
+      return body['error'] ?? 'Erreur inconnue';
+    } catch (_) {
+      return 'Erreur ${res.statusCode}';
+    }
+  }
 }

@@ -30,6 +30,25 @@ def create_conversation():
     return jsonify(conv.to_dict()), 201
 
 
+
+@conv_bp.route('/conversations/delete-all', methods=['DELETE'])
+@jwt_required()
+def delete_all_conversations():
+    user_id = int(get_jwt_identity())
+    try:
+        convs = Conversation.query.filter_by(user_id=user_id).all()
+        count = len(convs)
+        for conv in convs:
+            db.session.delete(conv)
+        db.session.commit()
+        return jsonify({
+            "message": f"{count} conversation(s) supprimée(s) avec succès"
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Erreur lors de la suppression : {str(e)}"}), 500
+
+
 @conv_bp.route('/conversations/<int:conv_id>/messages', methods=['GET'])
 @jwt_required()
 def get_messages(conv_id):

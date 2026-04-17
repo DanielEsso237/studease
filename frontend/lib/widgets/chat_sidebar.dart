@@ -12,6 +12,7 @@ class ChatSidebar extends StatelessWidget {
   final Function(ConvSummary, String) onRename;
   final VoidCallback onNewChat;
   final VoidCallback onClose;
+  final VoidCallback onRefresh;
   final String username;
 
   const ChatSidebar({
@@ -23,6 +24,7 @@ class ChatSidebar extends StatelessWidget {
     required this.onRename,
     required this.onNewChat,
     required this.onClose,
+    required this.onRefresh,
     required this.username,
   });
 
@@ -149,7 +151,6 @@ class ChatSidebar extends StatelessWidget {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(12),
               child: ElevatedButton(
@@ -160,7 +161,6 @@ class ChatSidebar extends StatelessWidget {
                 child: const Text("Nouvelle conversation"),
               ),
             ),
-
             Expanded(
               child: conversations.isEmpty
                   ? Center(
@@ -196,9 +196,7 @@ class ChatSidebar extends StatelessWidget {
                       },
                     ),
             ),
-
             const Divider(height: 1),
-
             ListTile(
               leading: CircleAvatar(
                 radius: 16,
@@ -221,15 +219,18 @@ class ChatSidebar extends StatelessWidget {
                 "Mon compte",
                 style: TextStyle(fontSize: 12),
               ),
-              onTap: () {
+              onTap: () async {
                 onClose();
-                Navigator.push(
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AccountPage()),
                 );
+                if (result == 'refresh') {
+                  onNewChat();
+                  onRefresh();
+                }
               },
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: SizedBox(
