@@ -57,7 +57,6 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(conv_bp)
 app.register_blueprint(account_bp)
 
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY n'est pas définie dans .env")
@@ -85,8 +84,6 @@ RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
 6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles. Tu utilises le markdown pour structurer tes réponses quand c'est utile : **gras** pour les points importants et quand tu cites des élèments, *italique* pour les nuances, des listes à puces ou numérotées pour énumérer, des titres (##) pour les sections. Pour les réponses courtes et simples, le markdown n'est pas nécessaire.
 
 7. Tu utilises souvent des émojis pour etre plus chaleureux et amical """
-
-
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -128,8 +125,9 @@ def _save_meta():
 
 def _load_rag_background():
     global vector_store, _rag_ready
+
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="intfloat/multilingual-e5-large"
     )
 
     try:
@@ -152,13 +150,28 @@ def _load_rag_background():
                             page.extract_text() or "" for page in reader.pages
                         )
                         splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=800, chunk_overlap=150, length_function=len
+                            chunk_size=800,
+                            chunk_overlap=250,
+                            separators=["\n\n", "\n###", "\n##", "\n• ", "\n- ", "\n"],
+                            length_function=len
                         )
                         for chunk in splitter.split_text(text):
+                            section = "general"
+                            if any(x in chunk.lower() for x in ["licence 1", "l1"]):
+                                section = "L1"
+                            elif any(x in chunk.lower() for x in ["licence 2", "licence 3", "l2", "l3", "transfert", "transféré"]):
+                                section = "L2_L3_transfer"
+                            elif "master" in chunk.lower():
+                                section = "Master"
+
                             docs.append(
                                 Document(
                                     page_content=chunk,
-                                    metadata={"source": filename},
+                                    metadata={
+                                        "source": filename,
+                                        "filename": filename,
+                                        "section": section
+                                    }
                                 )
                             )
                         print(f"[RAG]   ✓ {filename}")
@@ -281,10 +294,8 @@ def chat():
 
     context = ""
     if vs:
-        results = vs.similarity_search_with_score(user_message, k=4)
-        for doc, score in results:
-          print(f"[RAG] score={score:.4f} | {doc.page_content[:80]}")
-        relevant = [doc for doc, score in results if score < 1.5]
+        results = vs.similarity_search_with_score(user_message, k=10)
+        relevant = [doc for doc, score in results if score < 2.0]
 
         if relevant:
             raw_ctx = "\n\n".join(doc.page_content for doc in relevant)
@@ -314,15 +325,15 @@ def chat():
             *history,
             {"role": "user", "content": user_message},
         ],
-        "stream": stream_requested,
+        "stream":      stream_requested,
         "temperature": 0.2,
-        "max_tokens": 1200,
+        "max_tokens":  1200,
     }
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
+        "Content-Type":  "application/json",
     }
 
     try:
@@ -392,7 +403,7 @@ def chat():
 
                 try:
                     parsed = json.loads(payload_str)
-                    delta = parsed['choices'][0]['delta'].get('content', '')
+                    delta  = parsed['choices'][0]['delta'].get('content', '')
                     if delta:
                         assistant_buffer.append(delta)
                 except Exception:
@@ -404,7 +415,6 @@ def chat():
 
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
-        print(f"[Request ERROR] {error_text}")
         return jsonify({"error": f"Erreur Groq: {error_text}"}), 500
 
     except Exception as e:
