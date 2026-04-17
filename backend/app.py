@@ -81,9 +81,9 @@ RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
 
 5. Tu n'inventes jamais de noms, de dates, de chiffres, de procédures ou de règles. Si une information n'est pas dans le contexte, elle n'existe pas pour toi.
 
-6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles. Tu utilises le markdown pour structurer tes réponses quand c'est utile : **gras** pour les points importants et quand tu cites des élèments, *italique* pour les nuances, des listes à puces ou numérotées pour énumérer, des titres (##) pour les sections. Pour les réponses courtes et simples, le markdown n'est pas nécessaire.
+6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles. Tu utilises le markdown pour structurer tes réponses quand c'est utile.
 
-7. Tu utilises souvent des émojis pour etre plus chaleureux et amical """
+7. Tu utilises souvent des émojis pour être plus chaleureux et amical """
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -123,6 +123,25 @@ def _save_meta():
         json.dump(_get_pdf_signatures(), fh)
 
 
+def _load_full_pdf(filename):
+    path = os.path.join(PDF_FOLDER, filename)
+    if not os.path.exists(path):
+        return ""
+    try:
+        reader = PdfReader(path)
+        text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+        return text[:15000]  # limite pour éviter de dépasser le contexte
+    except:
+        return ""
+
+
+def _should_use_fallback(user_message):
+    keywords = ["transfert", "transféré", "l3", "l2", "dossier", "pièces", "composition", 
+                "préinscription", "preinscription", "master", "licence 3", "licence 2"]
+    msg_lower = user_message.lower()
+    return any(kw in msg_lower for kw in keywords)
+
+
 def _load_rag_background():
     global vector_store, _rag_ready
 
@@ -146,9 +165,7 @@ def _load_rag_background():
                     path = os.path.join(PDF_FOLDER, filename)
                     try:
                         reader = PdfReader(path)
-                        text = "".join(
-                            page.extract_text() or "" for page in reader.pages
-                        )
+                        text = "".join(page.extract_text() or "" for page in reader.pages)
                         splitter = RecursiveCharacterTextSplitter(
                             chunk_size=800,
                             chunk_overlap=250,
@@ -157,11 +174,12 @@ def _load_rag_background():
                         )
                         for chunk in splitter.split_text(text):
                             section = "general"
-                            if any(x in chunk.lower() for x in ["licence 1", "l1"]):
+                            lower_chunk = chunk.lower()
+                            if any(x in lower_chunk for x in ["licence 1", "l1"]):
                                 section = "L1"
-                            elif any(x in chunk.lower() for x in ["licence 2", "licence 3", "l2", "l3", "transfert", "transféré"]):
+                            elif any(x in lower_chunk for x in ["licence 2", "licence 3", "l2", "l3", "transfert", "transféré"]):
                                 section = "L2_L3_transfer"
-                            elif "master" in chunk.lower():
+                            elif "master" in lower_chunk:
                                 section = "Master"
 
                             docs.append(
@@ -257,9 +275,7 @@ def chat():
         rag_ready = _rag_ready
 
     if not rag_ready:
-        return jsonify({
-            "error": "Le système démarre, merci de patienter quelques secondes et de réessayer."
-        }), 503
+        return jsonify({"error": "Le système démarre, merci de patienter quelques secondes et de réessayer."}), 503
 
     user_id = int(get_jwt_identity())
     data = request.get_json()
@@ -293,27 +309,37 @@ def chat():
         vs = vector_store
 
     context = ""
+    fallback_used = False
+
     if vs:
         results = vs.similarity_search_with_score(user_message, k=10)
         relevant = [doc for doc, score in results if score < 2.0]
 
-        if relevant:
+        # Fallback si peu de résultats pertinents ou mots-clés sensibles
+        if len(relevant) < 3 or _should_use_fallback(user_message):
+            print("[RAG] Fallback activé - chargement PDF complet")
+            fallback_used = True
+            full_context = ""
+            for filename in os.listdir(PDF_FOLDER):
+                if filename.lower().endswith(".pdf"):
+                    full_text = _load_full_pdf(filename)
+                    if full_text:
+                        full_context += f"\n\n--- Document : {filename} ---\n{full_text}"
+
+            if full_context:
+                context = (
+                    "Voici les informations complètes extraites des documents officiels :\n\n"
+                    + full_context
+                    + "\n\n---\nUtilise uniquement ces informations pour répondre de façon claire et structurée."
+                )
+            else:
+                context = "Aucune information disponible dans les documents."
+        else:
             raw_ctx = "\n\n".join(doc.page_content for doc in relevant)
             context = (
                 "Voici les informations officielles disponibles pour répondre à cette question :\n\n"
                 + raw_ctx
-                + "\n\n---\n"
-                "Utilise uniquement ces informations pour formuler ta réponse, "
-                "de façon naturelle et chaleureuse. "
-                "Si elles ne permettent pas de répondre précisément, dis-le honnêtement "
-                "sans rien inventer, et oriente l'utilisateur vers le secrétariat ou le site officiel."
-            )
-        else:
-            context = (
-                "Aucune information pertinente n'est disponible pour cette question. "
-                "Tu dois le signaler à l'utilisateur avec bienveillance et l'orienter "
-                "vers le secrétariat de la faculté ou le site officiel de l'Université d'Ebolowa. "
-                "N'invente aucune information."
+                + "\n\n---\nUtilise uniquement ces informations pour formuler ta réponse de façon naturelle et chaleureuse."
             )
 
     full_system_prompt = SYSTEM_PROMPT_BASE + "\n\n" + context
@@ -325,39 +351,28 @@ def chat():
             *history,
             {"role": "user", "content": user_message},
         ],
-        "stream":      stream_requested,
+        "stream": stream_requested,
         "temperature": 0.2,
-        "max_tokens":  1200,
+        "max_tokens": 1200,
     }
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
     }
 
     try:
-        resp = requests.post(
-            url, json=payload, headers=headers,
-            stream=stream_requested, timeout=90
-        )
+        resp = requests.post(url, json=payload, headers=headers, stream=stream_requested, timeout=90)
 
         if resp.status_code != 200:
-            error_text = resp.text[:800]
-            print(f"[Groq ERROR] Status {resp.status_code} - {error_text}")
             return jsonify({"error": f"Groq error {resp.status_code}"}), resp.status_code
 
         if not stream_requested:
-            resp.raise_for_status()
             answer = resp.json()['choices'][0]['message']['content']
             with app.app_context():
-                db.session.add(Message(
-                    conversation_id=conv.id, role='assistant', content=answer))
-                db.session.execute(
-                    db.update(Conversation)
-                    .where(Conversation.id == conv.id)
-                    .values(updated_at=datetime.utcnow())
-                )
+                db.session.add(Message(conversation_id=conv.id, role='assistant', content=answer))
+                db.session.execute(db.update(Conversation).where(Conversation.id == conv.id).values(updated_at=datetime.utcnow()))
                 db.session.commit()
             return jsonify({"response": answer, "conversation_id": conv.id})
 
@@ -379,31 +394,19 @@ def chat():
                 if payload_str == '[DONE]':
                     full_answer = ''.join(assistant_buffer)
                     with app.app_context():
-                        db.session.add(Message(
-                            conversation_id=conv.id,
-                            role='assistant',
-                            content=full_answer
-                        ))
-                        db.session.execute(
-                            db.update(Conversation)
-                            .where(Conversation.id == conv.id)
-                            .values(updated_at=datetime.utcnow())
-                        )
+                        db.session.add(Message(conversation_id=conv.id, role='assistant', content=full_answer))
+                        db.session.execute(db.update(Conversation).where(Conversation.id == conv.id).values(updated_at=datetime.utcnow()))
                         db.session.commit()
 
                     if is_first_exchange:
-                        threading.Thread(
-                            target=_generate_title,
-                            args=(conv.id, user_message, full_answer),
-                            daemon=True
-                        ).start()
+                        threading.Thread(target=_generate_title, args=(conv.id, user_message, full_answer), daemon=True).start()
 
                     yield 'data: [DONE]\n\n'
                     break
 
                 try:
                     parsed = json.loads(payload_str)
-                    delta  = parsed['choices'][0]['delta'].get('content', '')
+                    delta = parsed['choices'][0]['delta'].get('content', '')
                     if delta:
                         assistant_buffer.append(delta)
                 except Exception:
@@ -412,10 +415,6 @@ def chat():
                 yield decoded + '\n\n'
 
         return Response(generate(), mimetype='text/event-stream')
-
-    except requests.exceptions.RequestException as e:
-        error_text = e.response.text if e.response else str(e)
-        return jsonify({"error": f"Erreur Groq: {error_text}"}), 500
 
     except Exception as e:
         import traceback
