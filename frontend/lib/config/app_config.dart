@@ -11,6 +11,7 @@ class AppConfig {
   static const String accountUsernameUrl = '$baseUrl/account/username';
   static const String accountPasswordUrl = '$baseUrl/account/password';
   static const String statusUrl = '$baseUrl/status';
+  static const String googleAuthUrl = '$baseUrl/auth/google';
 
   static String messagesUrl(int convId) =>
       '$baseUrl/conversations/$convId/messages';

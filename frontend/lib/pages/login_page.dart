@@ -25,6 +25,7 @@ class _LoginPageState extends State<LoginPage> {
 
   bool obscurePassword = true;
   bool isLoading = false;
+  bool isGoogleLoading = false;
 
   String? _emailError;
   String? _passwordError;
@@ -105,6 +106,7 @@ class _LoginPageState extends State<LoginPage> {
           token: body['token'],
           name: body['user']['name'],
           email: body['user']['email'],
+          avatarUrl: body['user']['avatar_url'],
         );
         if (!mounted) return;
         Navigator.pushAndRemoveUntil(
@@ -128,14 +130,42 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Impossible de joindre le serveur — vérifie l\'URL dans app_config.dart',
-          ),
+          content: Text('Impossible de joindre le serveur'),
           backgroundColor: Colors.red,
         ),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => isGoogleLoading = true);
+
+    try {
+      final result = await AuthService.signInWithGoogle();
+      if (result != null && mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const ChatPage()),
+          (_) => false,
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Échec de la connexion avec Google"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isGoogleLoading = false);
     }
   }
 
@@ -230,7 +260,13 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    GoogleLoginButton(onPressed: () {}),
+                    isGoogleLoading
+                        ? const SizedBox(
+                            height: 45,
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : GoogleLoginButton(onPressed: _signInWithGoogle),
+
                     const SizedBox(height: 24),
 
                     Row(
