@@ -57,8 +57,8 @@ with app.app_context():
     db.create_all()
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(conv_bp, url_prefix='/conversations')
-app.register_blueprint(account_bp, url_prefix='/account')
+app.register_blueprint(conv_bp)
+app.register_blueprint(account_bp)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
