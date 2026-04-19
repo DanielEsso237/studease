@@ -19,6 +19,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 load_dotenv()
 
@@ -53,40 +56,32 @@ JWTManager(app)
 with app.app_context():
     db.create_all()
 
-
 app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(conv_bp, url_prefix='/conversations')
-app.register_blueprint(account_bp, url_prefix='/account')
-
-
+app.register_blueprint(conv_bp)
+app.register_blueprint(account_bp)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY n'est pas définie dans .env")
 
+# Configuration Email
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+EMAIL_RECEIVER = "essodaniel55@gmail.com"
+
 MODEL = "llama-3.3-70b-versatile"
 
 SYSTEM_PROMPT_BASE = """Tu es Studease, l'assistant officiel et bienveillant de la Faculté des Sciences de l'Université d'Ebolowa (Cameroun).
 
-Tu accompagnes chaleureusement les étudiants, enseignants et le personnel administratif sur tout ce qui touche à la faculté : inscriptions, programmes, emplois du temps, procédures administratives, services, bourses, événements, règlement intérieur, orientation, stages, et bien plus encore.
+Tu accompagnes chaleureusement les étudiants, enseignants et le personnel administratif sur tout ce qui touche à la faculté.
 
-Tu as une personnalité amicale, patiente et encourageante. Tu t'adresses à l'utilisateur de façon naturelle et humaine, comme un conseiller de confiance qui connaît parfaitement la faculté.
+Tu as une personnalité amicale, patiente et encourageante.
 
 RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
 
-1. Tu bases TOUJOURS tes réponses exclusivement sur les informations du contexte fourni. Tu ne complètes jamais avec des suppositions ou des connaissances extérieures.
-
-2. Quand le contexte contient la réponse, tu la formules de façon claire, structurée et chaleureuse — comme si c'était une connaissance naturelle que tu as de la faculté. Tu ne mentionnes jamais l'existence de "documents", "extraits" ou "contexte".
-
-3. Quand le contexte ne contient pas la réponse, tu le dis honnêtement mais avec bienveillance, par exemple : "Je n'ai pas encore cette information, mais je te conseille de contacter le secrétariat de la faculté ou de consulter le site officiel de l'Université d'Ebolowa — ils pourront t'aider rapidement 😊"
-
-4. Tu ne réponds qu'aux questions qui concernent la Faculté des Sciences de l'Université d'Ebolowa. Si quelqu'un te demande autre chose, tu rappelles gentiment ton rôle : "Je suis dédié à la Faculté des Sciences de l'Université d'Ebolowa, donc je ne peux pas t'aider sur ce sujet — mais pour tout ce qui concerne la fac, je suis là !"
-
-5. Tu n'inventes jamais de noms, de dates, de chiffres, de procédures ou de règles. Si une information n'est pas dans le contexte, elle n'existe pas pour toi.
-
-6. Tu réponds toujours en français, avec un ton chaleureux et des formulations naturelles. Tu utilises le markdown pour structurer tes réponses quand c'est utile.
-
-7. Tu utilises souvent des émojis pour être plus chaleureux et amical """
+1. Si la question ne concerne pas la Faculté des Sciences de l'Université d'Ebolowa, tu réponds poliment que tu ne peux pas aider sur ce sujet.
+2. Si la question concerne la fac mais que tu n'as pas l'information, tu dis honnêtement que tu n'as pas encore cette information et tu conseilles de se rapprocher du secrétariat ou du délégué de classe.
+3. Tu réponds toujours en français, de façon naturelle et chaleureuse."""
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -133,33 +128,65 @@ def _load_full_pdf(filename):
     try:
         reader = PdfReader(path)
         text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
-        return text[:15000]  # limite pour éviter de dépasser le contexte
+        return text[:15000]
     except:
         return ""
 
 
-def _should_use_fallback(user_message):
+def _is_off_topic(user_message: str) -> bool:
+    off_topic_keywords = ["coupe du monde", "météo", "recette", "football", "musique", "film", "politique", "temps", "comment faire", "qui a gagné", "omelette"]
+    msg_lower = user_message.lower()
+    return any(kw in msg_lower for kw in off_topic_keywords)
+
+
+def _should_use_fallback(user_message: str) -> bool:
     keywords = ["transfert", "transféré", "l3", "l2", "dossier", "pièces", "composition", 
-                "préinscription", "preinscription", "master", "licence 3", "licence 2"]
+                "préinscription", "preinscription", "master", "licence 3", "licence 2", "credit", "crédit", "examen", "rattrapage"]
     msg_lower = user_message.lower()
     return any(kw in msg_lower for kw in keywords)
+
+
+def _send_unanswered_question(user_message: str, user_id: int):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = EMAIL_RECEIVER
+        msg['Subject'] = f"Question sans réponse - Utilisateur {user_id}"
+
+        body = f"""
+Nouvelle question posée à Studease sans réponse dans la base de connaissance :
+
+Utilisateur ID : {user_id}
+Question : {user_message}
+
+Date : {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+        """
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        print(f"[EMAIL] Question envoyée : {user_message[:80]}...")
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] {e}")
+        return False
 
 
 def _load_rag_background():
     global vector_store, _rag_ready
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="intfloat/multilingual-e5-large"
-    )
+    embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
 
     try:
         if not _index_is_stale():
-            vs = FAISS.load_local(
-                INDEX_PATH, embeddings, allow_dangerous_deserialization=True
-            )
+            vs = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
             print("[RAG] Index chargé depuis le cache ✓")
         else:
-            print("[RAG] Changement détecté — reconstruction de l'index…")
+            print("[RAG] Reconstruction de l'index…")
             docs = []
             if os.path.exists(PDF_FOLDER):
                 for filename in os.listdir(PDF_FOLDER):
@@ -170,31 +197,23 @@ def _load_rag_background():
                         reader = PdfReader(path)
                         text = "".join(page.extract_text() or "" for page in reader.pages)
                         splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=800,
-                            chunk_overlap=250,
-                            separators=["\n\n", "\n###", "\n##", "\n• ", "\n- ", "\n"],
-                            length_function=len
+                            chunk_size=800, chunk_overlap=250,
+                            separators=["\n\n", "\n###", "\n##", "\n• ", "\n- ", "\n"]
                         )
                         for chunk in splitter.split_text(text):
                             section = "general"
-                            lower_chunk = chunk.lower()
-                            if any(x in lower_chunk for x in ["licence 1", "l1"]):
+                            lower = chunk.lower()
+                            if any(x in lower for x in ["licence 1", "l1"]):
                                 section = "L1"
-                            elif any(x in lower_chunk for x in ["licence 2", "licence 3", "l2", "l3", "transfert", "transféré"]):
+                            elif any(x in lower for x in ["l2", "l3", "transfert", "transféré"]):
                                 section = "L2_L3_transfer"
-                            elif "master" in lower_chunk:
+                            elif "master" in lower:
                                 section = "Master"
 
-                            docs.append(
-                                Document(
-                                    page_content=chunk,
-                                    metadata={
-                                        "source": filename,
-                                        "filename": filename,
-                                        "section": section
-                                    }
-                                )
-                            )
+                            docs.append(Document(
+                                page_content=chunk,
+                                metadata={"source": filename, "filename": filename, "section": section}
+                            ))
                         print(f"[RAG]   ✓ {filename}")
                     except Exception as e:
                         print(f"[RAG]   ✗ {filename} : {e}")
@@ -205,18 +224,13 @@ def _load_rag_background():
                 vs.save_local(INDEX_PATH)
                 _save_meta()
                 print(f"[RAG] Index reconstruit avec {len(docs)} chunks ✓")
-            else:
-                vs = None
-                print("[RAG] Aucun PDF trouvé — RAG désactivé")
 
         with _rag_lock:
             vector_store = vs
-            _rag_ready   = True
+            _rag_ready = True
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"[RAG] Erreur lors du chargement : {e}")
+        print(f"[RAG] Erreur : {e}")
         with _rag_lock:
             _rag_ready = True
 
@@ -302,26 +316,21 @@ def chat():
     db.session.add(Message(conversation_id=conv.id, role='user', content=user_message))
     db.session.commit()
 
-    raw_history = [
-        {"role": m.role, "content": m.content}
-        for m in conv.messages[:-1]
-    ]
+    raw_history = [{"role": m.role, "content": m.content} for m in conv.messages[:-1]]
     history = raw_history[-MAX_HISTORY:]
 
     with _rag_lock:
         vs = vector_store
 
     context = ""
-    fallback_used = False
 
     if vs:
         results = vs.similarity_search_with_score(user_message, k=10)
         relevant = [doc for doc, score in results if score < 2.0]
 
-        # Fallback si peu de résultats pertinents ou mots-clés sensibles
-        if len(relevant) < 3 or _should_use_fallback(user_message):
-            print("[RAG] Fallback activé - chargement PDF complet")
-            fallback_used = True
+        if _is_off_topic(user_message):
+            context = "La question ne concerne pas la Faculté des Sciences de l'Université d'Ebolowa."
+        elif len(relevant) < 3 or _should_use_fallback(user_message):
             full_context = ""
             for filename in os.listdir(PDF_FOLDER):
                 if filename.lower().endswith(".pdf"):
@@ -330,20 +339,12 @@ def chat():
                         full_context += f"\n\n--- Document : {filename} ---\n{full_text}"
 
             if full_context:
-                context = (
-                    "Voici les informations complètes extraites des documents officiels :\n\n"
-                    + full_context
-                    + "\n\n---\nUtilise uniquement ces informations pour répondre de façon claire et structurée."
-                )
+                context = "Voici les informations complètes des documents officiels :\n\n" + full_context
             else:
-                context = "Aucune information disponible dans les documents."
+                context = "Aucune information trouvée dans les documents."
         else:
             raw_ctx = "\n\n".join(doc.page_content for doc in relevant)
-            context = (
-                "Voici les informations officielles disponibles pour répondre à cette question :\n\n"
-                + raw_ctx
-                + "\n\n---\nUtilise uniquement ces informations pour formuler ta réponse de façon naturelle et chaleureuse."
-            )
+            context = "Voici les informations officielles disponibles :\n\n" + raw_ctx
 
     full_system_prompt = SYSTEM_PROMPT_BASE + "\n\n" + context
 
@@ -360,10 +361,7 @@ def chat():
     }
 
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
 
     try:
         resp = requests.post(url, json=payload, headers=headers, stream=stream_requested, timeout=90)
@@ -373,6 +371,12 @@ def chat():
 
         if not stream_requested:
             answer = resp.json()['choices'][0]['message']['content']
+            
+            low_answer = answer.lower()
+            if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or 
+                "secrétariat" in low_answer or "délégué" in low_answer):
+                _send_unanswered_question(user_message, user_id)
+
             with app.app_context():
                 db.session.add(Message(conversation_id=conv.id, role='assistant', content=answer))
                 db.session.execute(db.update(Conversation).where(Conversation.id == conv.id).values(updated_at=datetime.utcnow()))
@@ -396,6 +400,12 @@ def chat():
 
                 if payload_str == '[DONE]':
                     full_answer = ''.join(assistant_buffer)
+                    
+                    low_answer = full_answer.lower()
+                    if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or 
+                        "secrétariat" in low_answer or "délégué" in low_answer):
+                        _send_unanswered_question(user_message, user_id)
+
                     with app.app_context():
                         db.session.add(Message(conversation_id=conv.id, role='assistant', content=full_answer))
                         db.session.execute(db.update(Conversation).where(Conversation.id == conv.id).values(updated_at=datetime.utcnow()))
