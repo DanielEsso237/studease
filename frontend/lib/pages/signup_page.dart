@@ -144,7 +144,6 @@ class _SignupPageState extends State<SignupPage> {
         );
         Navigator.pop(context);
       } else if (response.statusCode == 409) {
-        // Email déjà utilisé
         setState(() => _emailError = "Cette adresse email est déjà utilisée");
       } else {
         final msg = body['error'] ?? 'Une erreur est survenue';

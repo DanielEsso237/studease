@@ -2,8 +2,9 @@ class AppConfig {
   static const String baseUrl =
       'https://enriqueta-overpositive-leandra.ngrok-free.dev';
 
-  static const String registerUrl = '$baseUrl/register';
-  static const String loginUrl = '$baseUrl/login';
+  static const String registerUrl = '$baseUrl/auth/register';
+  static const String loginUrl = '$baseUrl/auth/login';
+  static const String googleAuthUrl = '$baseUrl/auth/google';
   static const String chatUrl = '$baseUrl/chat';
   static const String conversationsUrl = '$baseUrl/conversations';
   static const String conversationsAllUrl = '$baseUrl/conversations/delete-all';

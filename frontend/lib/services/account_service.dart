@@ -63,8 +63,6 @@ class AccountService {
     return body['error'] ?? 'Erreur inconnue';
   }
 
-  /// Supprime toutes les conversations de l'utilisateur connecté.
-  /// Retourne null si succès, sinon le message d'erreur.
   static Future<String?> deleteAllConversations() async {
     final res = await http
         .delete(
