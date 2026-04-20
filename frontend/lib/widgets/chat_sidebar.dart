@@ -4,7 +4,7 @@ import '../pages/login_page.dart';
 import '../pages/account_page.dart';
 import '../models/conv_summary.dart';
 
-class ChatSidebar extends StatelessWidget {
+class ChatSidebar extends StatefulWidget {
   final List<ConvSummary> conversations;
   final int? selectedConvId;
   final Function(ConvSummary) onSelect;
@@ -28,7 +28,22 @@ class ChatSidebar extends StatelessWidget {
     required this.username,
   });
 
-  String get _initiale => username.isNotEmpty ? username[0].toUpperCase() : '?';
+  @override
+  State<ChatSidebar> createState() => _ChatSidebarState();
+}
+
+class _ChatSidebarState extends State<ChatSidebar> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String get _initiale =>
+      widget.username.isNotEmpty ? widget.username[0].toUpperCase() : '?';
 
   Color _avatarColor() {
     final colors = [
@@ -39,11 +54,19 @@ class ChatSidebar extends StatelessWidget {
       Colors.pink,
       Colors.green,
     ];
-    if (username.isEmpty) return Colors.grey;
-    return colors[username.codeUnitAt(0) % colors.length];
+    if (widget.username.isEmpty) return Colors.grey;
+    return colors[widget.username.codeUnitAt(0) % colors.length];
   }
 
-  Future<void> _showRenameDialog(BuildContext context, ConvSummary conv) async {
+  List<ConvSummary> get _filteredConversations {
+    if (_searchQuery.isEmpty) return widget.conversations;
+    final q = _searchQuery.toLowerCase();
+    return widget.conversations
+        .where((c) => c.title.toLowerCase().contains(q))
+        .toList();
+  }
+
+  Future<void> _showRenameDialog(ConvSummary conv) async {
     final controller = TextEditingController(text: conv.title);
     final confirm = await showDialog<String>(
       context: context,
@@ -67,10 +90,10 @@ class ChatSidebar extends StatelessWidget {
         ],
       ),
     );
-    if (confirm != null && confirm.isNotEmpty) onRename(conv, confirm);
+    if (confirm != null && confirm.isNotEmpty) widget.onRename(conv, confirm);
   }
 
-  Future<void> _confirmDelete(BuildContext context, ConvSummary conv) async {
+  Future<void> _confirmDelete(ConvSummary conv) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -90,10 +113,10 @@ class ChatSidebar extends StatelessWidget {
         ],
       ),
     );
-    if (confirm == true) onDelete(conv);
+    if (confirm == true) widget.onDelete(conv);
   }
 
-  Future<void> _logout(BuildContext context) async {
+  Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -126,6 +149,8 @@ class ChatSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredConversations;
+
     return Material(
       elevation: 4,
       child: Container(
@@ -141,7 +166,10 @@ class ChatSidebar extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  IconButton(icon: const Icon(Icons.close), onPressed: onClose),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: widget.onClose,
+                  ),
                   const Spacer(),
                   const Text(
                     "Conversations",
@@ -151,51 +179,150 @@ class ChatSidebar extends StatelessWidget {
                 ],
               ),
             ),
+
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
               child: ElevatedButton(
-                onPressed: onNewChat,
+                onPressed: widget.onNewChat,
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 45),
                 ),
                 child: const Text("Nouvelle conversation"),
               ),
             ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                decoration: InputDecoration(
+                  hintText: "Rechercher…",
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade400,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.grey.shade400,
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Colors.blue.shade300,
+                      width: 1.5,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ),
             Expanded(
-              child: conversations.isEmpty
+              child: filtered.isEmpty
                   ? Center(
                       child: Text(
-                        "Aucune conversation",
+                        _searchQuery.isEmpty
+                            ? "Aucune conversation"
+                            : "Aucun résultat",
                         style: TextStyle(color: Colors.grey.shade500),
                       ),
                     )
                   : ListView.builder(
-                      itemCount: conversations.length,
+                      itemCount: filtered.length,
                       itemBuilder: (context, index) {
-                        final conv = conversations[index];
-                        final isSelected = conv.id == selectedConvId;
+                        final conv = filtered[index];
+                        final isSelected = conv.id == widget.selectedConvId;
+
+                        final title = conv.title;
+                        final qLower = _searchQuery.toLowerCase();
+                        final matchIndex = _searchQuery.isEmpty
+                            ? -1
+                            : title.toLowerCase().indexOf(qLower);
+
                         return ListTile(
                           selected: isSelected,
                           selectedTileColor: Colors.blue.shade50,
-                          title: Text(
-                            conv.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => onSelect(conv),
-                          onLongPress: () => _showRenameDialog(context, conv),
+                          title: matchIndex >= 0
+                              ? RichText(
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  text: TextSpan(
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                    children: [
+                                      TextSpan(
+                                        text: title.substring(0, matchIndex),
+                                      ),
+                                      TextSpan(
+                                        text: title.substring(
+                                          matchIndex,
+                                          matchIndex + _searchQuery.length,
+                                        ),
+                                        style: TextStyle(
+                                          backgroundColor:
+                                              Colors.yellow.shade200,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: title.substring(
+                                          matchIndex + _searchQuery.length,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                          onTap: () => widget.onSelect(conv),
+                          onLongPress: () => _showRenameDialog(conv),
                           trailing: IconButton(
                             icon: const Icon(
                               Icons.delete_outline,
                               size: 18,
                               color: Colors.grey,
                             ),
-                            onPressed: () => _confirmDelete(context, conv),
+                            onPressed: () => _confirmDelete(conv),
                           ),
                         );
                       },
                     ),
             ),
+
             const Divider(height: 1),
             ListTile(
               leading: CircleAvatar(
@@ -211,7 +338,7 @@ class ChatSidebar extends StatelessWidget {
                 ),
               ),
               title: Text(
-                username,
+                widget.username,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -220,24 +347,25 @@ class ChatSidebar extends StatelessWidget {
                 style: TextStyle(fontSize: 12),
               ),
               onTap: () async {
-                onClose();
+                widget.onClose();
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AccountPage()),
                 );
                 if (result == 'refresh') {
-                  onNewChat();
-                  onRefresh();
+                  widget.onNewChat();
+                  widget.onRefresh();
                 }
               },
             ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: SizedBox(
                 width: double.infinity,
                 height: 45,
                 child: OutlinedButton.icon(
-                  onPressed: () => _logout(context),
+                  onPressed: _logout,
                   icon: const Icon(Icons.logout, color: Colors.red, size: 18),
                   label: const Text(
                     "Se déconnecter",
