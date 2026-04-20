@@ -11,6 +11,7 @@ import '../widgets/chat_input.dart';
 import '../widgets/thinking_indicator.dart';
 import '../widgets/chat_sidebar.dart';
 import '../models/conv_summary.dart';
+import '../widgets/question_suggestions.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -345,55 +346,66 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _buildEmptyPlaceholder() {
     return SafeArea(
-      child: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight:
-                MediaQuery.of(context).size.height - kToolbarHeight - 100,
-          ),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.white,
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/images/bot.png',
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.contain,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 24,
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.white,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/bot.png',
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    _personalizedGreeting,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
+                    const SizedBox(height: 24),
+                    Text(
+                      _personalizedGreeting,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Pose-moi une question sur la fac, un cours,\nou une procédure administrative !",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey.shade700,
-                      height: 1.4,
+                    const SizedBox(height: 12),
+                    Text(
+                      "Pose-moi une question sur la fac, un cours,\nou une procédure administrative !",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Colors.grey.shade700,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: QuestionSuggestions(
+              onSuggestionTap: (question) {
+                _controller.text = question;
+                _sendMessage();
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
