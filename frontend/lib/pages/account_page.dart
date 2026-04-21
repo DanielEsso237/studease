@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_messages.dart';
 import '../services/account_service.dart';
 import '../services/auth_service.dart';
 import '../main.dart';
@@ -39,6 +40,9 @@ class _AccountPageState extends State<AccountPage> {
         _createdAt = formatted;
         _isLoading = false;
       });
+    } else if (mounted) {
+      setState(() => _isLoading = false);
+      _showSnackBar(AppMessages.accountLoadError);
     }
   }
 
@@ -55,6 +59,15 @@ class _AccountPageState extends State<AccountPage> {
     ];
     if (_name.isEmpty) return Colors.grey;
     return colors[_name.codeUnitAt(0) % colors.length];
+  }
+
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green,
+      ),
+    );
   }
 
   void _showEditNameDialog() {
@@ -79,19 +92,17 @@ class _AccountPageState extends State<AccountPage> {
               if (newName.isEmpty) return;
               Navigator.pop(context);
               final ok = await AccountService.updateUsername(newName);
-              if (ok && mounted) {
+              if (!mounted) return;
+              if (ok) {
                 await AuthService.saveSession(
                   token: (await AuthService.getToken())!,
                   name: newName,
                   email: _email,
                 );
                 setState(() => _name = newName);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Nom mis à jour"),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                _showSnackBar(AppMessages.accountNameUpdated, isError: false);
+              } else {
+                _showSnackBar(AppMessages.accountNameError);
               }
             },
             child: const Text("Enregistrer"),
@@ -170,12 +181,7 @@ class _AccountPageState extends State<AccountPage> {
             TextButton(
               onPressed: () async {
                 if (newCtrl.text != confirmCtrl.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Les mots de passe ne correspondent pas"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  _showSnackBar(AppMessages.registerPasswordMismatch);
                   return;
                 }
                 Navigator.pop(ctx);
@@ -185,16 +191,13 @@ class _AccountPageState extends State<AccountPage> {
                 );
                 if (!mounted) return;
                 if (error == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Mot de passe mis à jour"),
-                      backgroundColor: Colors.green,
-                    ),
+                  _showSnackBar(
+                    AppMessages.accountPasswordUpdated,
+                    isError: false,
                   );
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error), backgroundColor: Colors.red),
-                  );
+                  final friendly = _friendlyPasswordError(error);
+                  _showSnackBar(friendly);
                 }
               },
               child: const Text("Enregistrer"),
@@ -205,13 +208,27 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  String _friendlyPasswordError(String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('actuel') || lower.contains('incorrect')) {
+      return AppMessages.accountPasswordWrong;
+    }
+    if (lower.contains('différent') || lower.contains('different')) {
+      return AppMessages.accountPasswordSame;
+    }
+    if (lower.contains('6') || lower.contains('caractère')) {
+      return AppMessages.accountPasswordTooShort;
+    }
+    return raw;
+  }
+
   void _showDeleteAllConversationsDialog() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Effacer toutes les discussions"),
         content: const Text(
-          "Cette action supprimera définitivement toutes tes conversations et tous les messages qu'elles contiennent.\n\nElle est irréversible.",
+          "Cette action supprimera définitivement toutes tes conversations. Elle est irréversible.",
           style: TextStyle(height: 1.5),
         ),
         actions: [
@@ -225,17 +242,13 @@ class _AccountPageState extends State<AccountPage> {
               final error = await AccountService.deleteAllConversations();
               if (!mounted) return;
               if (error == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Toutes les discussions ont été supprimées"),
-                    backgroundColor: Colors.green,
-                  ),
+                _showSnackBar(
+                  AppMessages.conversationsDeleteAllSuccess,
+                  isError: false,
                 );
                 Navigator.pop(context, 'refresh');
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(error), backgroundColor: Colors.red),
-                );
+                _showSnackBar(AppMessages.conversationsDeleteAllError);
               }
             },
             child: const Text(
@@ -300,9 +313,10 @@ class _AccountPageState extends State<AccountPage> {
                     (_) => false,
                   );
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error), backgroundColor: Colors.red),
-                  );
+                  final friendly = error.toLowerCase().contains('incorrect')
+                      ? AppMessages.accountDeleteWrongPassword
+                      : AppMessages.accountDeleteError;
+                  _showSnackBar(friendly);
                 }
               },
               child: const Text(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import '../config/app_config.dart';
+import '../config/app_messages.dart';
 import '../services/auth_service.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
@@ -33,14 +34,14 @@ class _LoginPageState extends State<LoginPage> {
   static final _emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
 
   String? _validateEmail(String v) {
-    if (v.trim().isEmpty) return "L'email est requis";
-    if (!_emailRegex.hasMatch(v.trim())) return "Adresse email invalide";
+    if (v.trim().isEmpty) return AppMessages.loginEmailRequired;
+    if (!_emailRegex.hasMatch(v.trim())) return AppMessages.loginEmailInvalid;
     return null;
   }
 
   String? _validatePassword(String v) {
-    if (v.isEmpty) return "Le mot de passe est requis";
-    if (v.length < 6) return "Au moins 6 caractères";
+    if (v.isEmpty) return AppMessages.loginPasswordRequired;
+    if (v.length < 6) return AppMessages.loginPasswordTooShort;
     return null;
   }
 
@@ -51,7 +52,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-
     _videoController =
         VideoPlayerController.asset("assets/animations/animated_logo.mp4")
           ..initialize().then((_) {
@@ -79,6 +79,15 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green,
+      ),
+    );
+  }
+
   Future<void> _onLoginPressed() async {
     setState(() {
       _emailError = _validateEmail(emailController.text);
@@ -92,7 +101,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final response = await http.post(
         Uri.parse(AppConfig.loginUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: await AuthService.baseHeaders(),
         body: jsonEncode({
           'email': emailController.text.trim().toLowerCase(),
           'password': passwordController.text,
@@ -116,24 +125,16 @@ class _LoginPageState extends State<LoginPage> {
         );
       } else if (response.statusCode == 401) {
         setState(() {
-          _emailError = "Email ou mot de passe incorrect";
-          _passwordError = "Email ou mot de passe incorrect";
+          _emailError = AppMessages.loginInvalidCredentials;
+          _passwordError = AppMessages.loginInvalidCredentials;
         });
       } else {
-        final msg = body['error'] ?? 'Erreur de connexion';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
+        _showSnackBar(AppMessages.loginServerError);
       }
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Impossible de joindre le serveur'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar(AppMessages.fromException(e));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -141,7 +142,6 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _signInWithGoogle() async {
     setState(() => isGoogleLoading = true);
-
     try {
       final result = await AuthService.signInWithGoogle();
       if (result != null && mounted) {
@@ -151,19 +151,10 @@ class _LoginPageState extends State<LoginPage> {
           (_) => false,
         );
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Échec de la connexion avec Google"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnackBar(AppMessages.loginGoogleFailed);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) _showSnackBar(AppMessages.fromException(e));
     } finally {
       if (mounted) setState(() => isGoogleLoading = false);
     }
@@ -190,7 +181,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(30),
@@ -218,13 +208,11 @@ class _LoginPageState extends State<LoginPage> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 25),
-
                     EmailField(
                       controller: emailController,
                       errorText: _emailError,
                     ),
                     const SizedBox(height: 16),
-
                     PasswordField(
                       controller: passwordController,
                       obscureText: obscurePassword,
@@ -233,7 +221,6 @@ class _LoginPageState extends State<LoginPage> {
                       errorText: _passwordError,
                     ),
                     const SizedBox(height: 24),
-
                     isLoading
                         ? const SizedBox(
                             height: 45,
@@ -246,7 +233,6 @@ class _LoginPageState extends State<LoginPage> {
                               label: "Continuer",
                             ),
                           ),
-
                     const SizedBox(height: 20),
                     Row(
                       children: const [
@@ -259,16 +245,13 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                     const SizedBox(height: 20),
-
                     isGoogleLoading
                         ? const SizedBox(
                             height: 45,
                             child: Center(child: CircularProgressIndicator()),
                           )
                         : GoogleLoginButton(onPressed: _signInWithGoogle),
-
                     const SizedBox(height: 24),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -293,7 +276,6 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
               const Text(
                 "© 2026 Studease",

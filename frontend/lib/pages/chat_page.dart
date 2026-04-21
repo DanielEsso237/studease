@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
+import '../config/app_messages.dart';
 import '../services/auth_service.dart';
 import '../widgets/chat_app_bar.dart';
 import '../widgets/chat_message.dart';
@@ -265,9 +266,7 @@ class _ChatPageState extends State<ChatPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Système en cours de démarrage, patiente un instant…",
-              ),
+              content: Text(AppMessages.chatSystemStarting),
               backgroundColor: Colors.orange,
             ),
           );
@@ -339,7 +338,7 @@ class _ChatPageState extends State<ChatPage> {
                 setState(() {
                   _messages[newAssistantIndex] = {
                     'role': 'assistant',
-                    'content': 'Erreur : $error',
+                    'content': AppMessages.chatStreamError,
                   };
                   _isLoading = false;
                 });
@@ -352,7 +351,7 @@ class _ChatPageState extends State<ChatPage> {
         setState(() {
           _messages[newAssistantIndex] = {
             'role': 'assistant',
-            'content': 'Erreur de connexion : $e',
+            'content': AppMessages.fromException(e),
           };
           _isLoading = false;
         });
