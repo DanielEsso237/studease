@@ -18,6 +18,22 @@ class AuthService {
     scopes: ['email', 'profile'],
   );
 
+  static Future<Map<String, String>> baseHeaders() async {
+    return {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    };
+  }
+
+  static Future<Map<String, String>> authHeaders() async {
+    final token = await getToken();
+    return {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
   static Future<void> saveSession({
     required String token,
     required String name,
@@ -70,23 +86,17 @@ class AuthService {
   static Future<Map<String, dynamic>?> signInWithGoogle() async {
     try {
       await _googleSignIn.signOut();
-
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        return null;
-      }
+      if (googleUser == null) return null;
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
       final idToken = googleAuth.idToken;
-
-      if (idToken == null) {
-        return null;
-      }
+      if (idToken == null) return null;
 
       final response = await http.post(
         Uri.parse(AppConfig.googleAuthUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: await baseHeaders(),
         body: jsonEncode({'id_token': idToken}),
       );
 
@@ -99,9 +109,8 @@ class AuthService {
           avatarUrl: body['user']['avatar_url'],
         );
         return body;
-      } else {
-        return null;
       }
+      return null;
     } catch (e) {
       print("Google Sign-In Error: $e");
       return null;

@@ -11,11 +11,24 @@ conv_bp = Blueprint('conversations', __name__)
 @jwt_required()
 def list_conversations():
     user_id = int(get_jwt_identity())
-    convs = (Conversation.query
-             .filter_by(user_id=user_id)
-             .order_by(Conversation.updated_at.desc())
-             .all())
-    return jsonify([c.to_dict() for c in convs]), 200
+    page    = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(per_page, 50)
+
+    pagination = (Conversation.query
+                  .filter_by(user_id=user_id)
+                  .order_by(Conversation.updated_at.desc())
+                  .paginate(page=page, per_page=per_page, error_out=False))
+
+    return jsonify({
+        "conversations": [c.to_dict() for c in pagination.items],
+        "total":         pagination.total,
+        "page":          pagination.page,
+        "per_page":      pagination.per_page,
+        "pages":         pagination.pages,
+        "has_next":      pagination.has_next,
+        "has_prev":      pagination.has_prev,
+    }), 200
 
 
 @conv_bp.route('/conversations', methods=['POST'])
@@ -28,7 +41,6 @@ def create_conversation():
     db.session.add(conv)
     db.session.commit()
     return jsonify(conv.to_dict()), 201
-
 
 
 @conv_bp.route('/conversations/delete-all', methods=['DELETE'])
@@ -52,18 +64,36 @@ def delete_all_conversations():
 @conv_bp.route('/conversations/<int:conv_id>/messages', methods=['GET'])
 @jwt_required()
 def get_messages(conv_id):
-    user_id = int(get_jwt_identity())
-    conv = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
+    user_id  = int(get_jwt_identity())
+    conv     = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
     if not conv:
         return jsonify({"error": "Conversation introuvable"}), 404
-    return jsonify([m.to_dict() for m in conv.messages]), 200
+
+    page     = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(per_page, 100)
+
+    pagination = (Message.query
+                  .filter_by(conversation_id=conv_id)
+                  .order_by(Message.created_at.asc())
+                  .paginate(page=page, per_page=per_page, error_out=False))
+
+    return jsonify({
+        "messages":  [m.to_dict() for m in pagination.items],
+        "total":     pagination.total,
+        "page":      pagination.page,
+        "per_page":  pagination.per_page,
+        "pages":     pagination.pages,
+        "has_next":  pagination.has_next,
+        "has_prev":  pagination.has_prev,
+    }), 200
 
 
 @conv_bp.route('/conversations/<int:conv_id>', methods=['DELETE'])
 @jwt_required()
 def delete_conversation(conv_id):
     user_id = int(get_jwt_identity())
-    conv = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
+    conv    = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
     if not conv:
         return jsonify({"error": "Conversation introuvable"}), 404
     db.session.delete(conv)
@@ -75,7 +105,7 @@ def delete_conversation(conv_id):
 @jwt_required()
 def rename_conversation(conv_id):
     user_id = int(get_jwt_identity())
-    conv = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
+    conv    = Conversation.query.filter_by(id=conv_id, user_id=user_id).first()
     if not conv:
         return jsonify({"error": "Conversation introuvable"}), 404
 

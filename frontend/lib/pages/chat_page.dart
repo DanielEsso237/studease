@@ -10,8 +10,8 @@ import '../widgets/chat_message.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/thinking_indicator.dart';
 import '../widgets/chat_sidebar.dart';
-import '../models/conv_summary.dart';
 import '../widgets/question_suggestions.dart';
+import '../models/conv_summary.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -23,6 +23,9 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   List<ConvSummary> _conversations = [];
   int? _currentConvId;
+  int _currentPage = 1;
+  bool _hasMore = false;
+  bool _isLoadingMore = false;
 
   final List<Map<String, String>> _messages = [];
   final TextEditingController _controller = TextEditingController();
@@ -52,7 +55,7 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _greeting = _greetings[Random().nextInt(_greetings.length)];
     _loadUsername();
-    _fetchConversations();
+    _fetchConversations(reset: true);
     _pollStatus();
   }
 
@@ -60,7 +63,10 @@ class _ChatPageState extends State<ChatPage> {
     _statusTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       try {
         final res = await http
-            .get(Uri.parse(AppConfig.statusUrl))
+            .get(
+              Uri.parse(AppConfig.statusUrl),
+              headers: {'ngrok-skip-browser-warning': 'true'},
+            )
             .timeout(const Duration(seconds: 5));
         if (res.statusCode == 200) {
           final body = jsonDecode(res.body);
@@ -78,52 +84,68 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) setState(() => _username = name ?? 'toi');
   }
 
-  Future<String?> _authHeader() async {
-    final token = await AuthService.getToken();
-    return token != null ? 'Bearer $token' : null;
-  }
+  Future<void> _fetchConversations({bool reset = false}) async {
+    if (_isLoadingMore) return;
+    final headers = await AuthService.authHeaders();
 
-  Future<void> _fetchConversations() async {
-    final auth = await _authHeader();
-    if (auth == null) return;
+    if (reset) {
+      _currentPage = 1;
+      _hasMore = false;
+    }
+
+    setState(() => _isLoadingMore = true);
+
     try {
+      final uri = Uri.parse(
+        AppConfig.conversationsUrl,
+      ).replace(queryParameters: {'page': '$_currentPage', 'per_page': '20'});
       final res = await http
-          .get(
-            Uri.parse(AppConfig.conversationsUrl),
-            headers: {'Authorization': auth},
-          )
+          .get(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
+
       if (res.statusCode == 401) {
         await AuthService.handleUnauthorized(context);
         return;
       }
+
       if (res.statusCode == 200) {
-        final List list = jsonDecode(res.body);
+        final data = jsonDecode(res.body);
+        final List list = data['conversations'];
+        final bool hasNext = data['has_next'] ?? false;
+
         if (mounted) {
           setState(() {
-            _conversations = list.map((j) => ConvSummary.fromJson(j)).toList();
+            if (reset) {
+              _conversations = list
+                  .map((j) => ConvSummary.fromJson(j))
+                  .toList();
+            } else {
+              _conversations.addAll(list.map((j) => ConvSummary.fromJson(j)));
+            }
+            _hasMore = hasNext;
+            if (hasNext) _currentPage++;
           });
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
   }
 
   Future<void> _loadConversation(ConvSummary conv) async {
-    final auth = await _authHeader();
-    if (auth == null) return;
+    final headers = await AuthService.authHeaders();
     try {
       final res = await http
-          .get(
-            Uri.parse(AppConfig.messagesUrl(conv.id)),
-            headers: {'Authorization': auth},
-          )
+          .get(Uri.parse(AppConfig.messagesUrl(conv.id)), headers: headers)
           .timeout(const Duration(seconds: 10));
       if (res.statusCode == 401) {
         await AuthService.handleUnauthorized(context);
         return;
       }
       if (res.statusCode == 200) {
-        final List list = jsonDecode(res.body);
+        final data = jsonDecode(res.body);
+        final List list = data['messages'];
         if (mounted) {
           setState(() {
             _currentConvId = conv.id;
@@ -147,11 +169,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _deleteConversation(ConvSummary conv) async {
-    final auth = await _authHeader();
-    if (auth == null) return;
+    final headers = await AuthService.authHeaders();
     await http.delete(
       Uri.parse(AppConfig.deleteConvUrl(conv.id)),
-      headers: {'Authorization': auth},
+      headers: headers,
     );
     if (_currentConvId == conv.id) {
       setState(() {
@@ -159,18 +180,17 @@ class _ChatPageState extends State<ChatPage> {
         _currentConvId = null;
       });
     }
-    _fetchConversations();
+    _fetchConversations(reset: true);
   }
 
   Future<void> _renameConversation(ConvSummary conv, String newTitle) async {
-    final auth = await _authHeader();
-    if (auth == null) return;
+    final headers = await AuthService.authHeaders();
     await http.put(
       Uri.parse(AppConfig.renameConvUrl(conv.id)),
-      headers: {'Authorization': auth, 'Content-Type': 'application/json'},
+      headers: headers,
       body: jsonEncode({'title': newTitle}),
     );
-    _fetchConversations();
+    _fetchConversations(reset: true);
   }
 
   void _scrollToBottom({bool animate = true}) {
@@ -204,8 +224,7 @@ class _ChatPageState extends State<ChatPage> {
     FocusScope.of(context).unfocus();
     _controller.clear();
 
-    final auth = await _authHeader();
-    if (auth == null) return;
+    final headers = await AuthService.authHeaders();
 
     setState(() {
       _messages.add({'role': 'user', 'content': text});
@@ -220,8 +239,7 @@ class _ChatPageState extends State<ChatPage> {
 
     try {
       final request = http.Request('POST', Uri.parse(AppConfig.chatUrl));
-      request.headers['Content-Type'] = 'application/json';
-      request.headers['Authorization'] = auth;
+      request.headers.addAll(headers);
       request.body = jsonEncode({
         'message': text,
         'conversation_id': _currentConvId,
@@ -282,7 +300,7 @@ class _ChatPageState extends State<ChatPage> {
                   if (mounted) {
                     setState(() => _isLoading = false);
                     _scrollToBottom();
-                    _fetchConversations();
+                    _fetchConversations(reset: true);
                   }
                   return;
                 }
@@ -315,7 +333,7 @@ class _ChatPageState extends State<ChatPage> {
               if (mounted) {
                 setState(() => _isLoading = false);
                 _scrollToBottom();
-                _fetchConversations();
+                _fetchConversations(reset: true);
               }
             },
             onError: (error) {
@@ -427,8 +445,9 @@ class _ChatPageState extends State<ChatPage> {
                         padding: const EdgeInsets.only(bottom: 8),
                         itemCount: _messages.length + (_isLoading ? 1 : 0),
                         itemBuilder: (context, index) {
-                          if (index == _messages.length)
+                          if (index == _messages.length) {
                             return const ThinkingIndicator();
+                          }
                           final msg = _messages[index];
                           return ChatMessage(
                             text: msg['content'] ?? '',
@@ -466,8 +485,10 @@ class _ChatPageState extends State<ChatPage> {
                   onRename: _renameConversation,
                   onNewChat: _startNewChat,
                   onClose: _toggleSidebar,
-                  onRefresh: _fetchConversations,
+                  onRefresh: () => _fetchConversations(reset: true),
                   username: _username,
+                  hasMore: _hasMore,
+                  onLoadMore: () => _fetchConversations(),
                 ),
               ),
             ),
