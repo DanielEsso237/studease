@@ -308,9 +308,7 @@ class _ChatPageState extends State<ChatPage> {
                 try {
                   final parsed = jsonDecode(data);
                   if (parsed is Map && parsed.containsKey('conversation_id')) {
-                    if (_currentConvId == null) {
-                      _currentConvId = parsed['conversation_id'] as int;
-                    }
+                    _currentConvId ??= parsed['conversation_id'] as int;
                     continue;
                   }
                   final delta =
@@ -431,37 +429,45 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: false,
       appBar: ChatAppBar(onMenuPressed: _toggleSidebar),
       body: Stack(
         children: [
-          Column(
-            children: [
-              Expanded(
-                child: _messages.isEmpty && !_isLoading
-                    ? _buildEmptyPlaceholder()
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 8),
-                        itemCount: _messages.length + (_isLoading ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _messages.length) {
-                            return const ThinkingIndicator();
-                          }
-                          final msg = _messages[index];
-                          return ChatMessage(
-                            text: msg['content'] ?? '',
-                            isUser: msg['role'] == 'user',
-                          );
-                        },
-                      ),
-              ),
-              ChatInput(
-                controller: _controller,
-                onSend: _sendMessage,
-                isReady: _systemReady,
-              ),
-            ],
+          Positioned.fill(
+            child: Column(
+              children: [
+                Expanded(
+                  child: _messages.isEmpty && !_isLoading
+                      ? _buildEmptyPlaceholder()
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(bottom: 8),
+                          itemCount: _messages.length + (_isLoading ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == _messages.length) {
+                              return const ThinkingIndicator();
+                            }
+                            final msg = _messages[index];
+                            return ChatMessage(
+                              text: msg['content'] ?? '',
+                              isUser: msg['role'] == 'user',
+                            );
+                          },
+                        ),
+                ),
+                AnimatedPadding(
+                  duration: const Duration(milliseconds: 0),
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: ChatInput(
+                    controller: _controller,
+                    onSend: _sendMessage,
+                    isReady: _systemReady,
+                  ),
+                ),
+              ],
+            ),
           ),
           if (_showSidebar)
             Positioned.fill(
