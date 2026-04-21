@@ -1,7 +1,7 @@
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, g
 from flasgger import Swagger
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, verify_jwt_in_request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import requests, json, threading
@@ -29,8 +29,20 @@ app = Flask(__name__)
 CORS(app)
 swagger = Swagger(app)
 
+
+def _rate_limit_key():
+    try:
+        verify_jwt_in_request(optional=True)
+        user_id = get_jwt_identity()
+        if user_id:
+            return f"user:{user_id}"
+    except Exception:
+        pass
+    return get_remote_address()
+
+
 limiter = Limiter(
-    get_remote_address,
+    key_func=_rate_limit_key,
     app=app,
     default_limits=["200 per hour"],
     storage_uri="memory://"
@@ -64,8 +76,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY n'est pas définie dans .env")
 
-# Configuration Email
-EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_SENDER   = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = "essodaniel55@gmail.com"
 
@@ -140,7 +151,7 @@ def _is_off_topic(user_message: str) -> bool:
 
 
 def _should_use_fallback(user_message: str) -> bool:
-    keywords = ["transfert", "transféré", "l3", "l2", "dossier", "pièces", "composition", 
+    keywords = ["transfert", "transféré", "l3", "l2", "dossier", "pièces", "composition",
                 "préinscription", "preinscription", "master", "licence 3", "licence 2", "credit", "crédit", "examen", "rattrapage"]
     msg_lower = user_message.lower()
     return any(kw in msg_lower for kw in keywords)
@@ -149,10 +160,9 @@ def _should_use_fallback(user_message: str) -> bool:
 def _send_unanswered_question(user_message: str, user_id: int):
     try:
         msg = MIMEMultipart()
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = EMAIL_RECEIVER
+        msg['From']    = EMAIL_SENDER
+        msg['To']      = EMAIL_RECEIVER
         msg['Subject'] = f"Question sans réponse - Utilisateur {user_id}"
-
         body = f"""
 Nouvelle question posée à Studease sans réponse dans la base de connaissance :
 
@@ -162,13 +172,11 @@ Question : {user_message}
 Date : {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
         """
         msg.attach(MIMEText(body, 'plain'))
-
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-
         print(f"[EMAIL] Question envoyée : {user_message[:80]}...")
         return True
     except Exception as e:
@@ -178,9 +186,7 @@ Date : {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 def _load_rag_background():
     global vector_store, _rag_ready
-
     embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
-
     try:
         if not _index_is_stale():
             vs = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
@@ -202,14 +208,13 @@ def _load_rag_background():
                         )
                         for chunk in splitter.split_text(text):
                             section = "general"
-                            lower = chunk.lower()
+                            lower   = chunk.lower()
                             if any(x in lower for x in ["licence 1", "l1"]):
                                 section = "L1"
                             elif any(x in lower for x in ["l2", "l3", "transfert", "transféré"]):
                                 section = "L2_L3_transfer"
                             elif "master" in lower:
                                 section = "Master"
-
                             docs.append(Document(
                                 page_content=chunk,
                                 metadata={"source": filename, "filename": filename, "section": section}
@@ -227,7 +232,7 @@ def _load_rag_background():
 
         with _rag_lock:
             vector_store = vs
-            _rag_ready = True
+            _rag_ready   = True
 
     except Exception as e:
         print(f"[RAG] Erreur : {e}")
@@ -257,12 +262,12 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
             "temperature": 0.3,
             "max_tokens": 20,
         }
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        url     = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json",
         }
-        res = requests.post(url, json=payload, headers=headers, timeout=15)
+        res   = requests.post(url, json=payload, headers=headers, timeout=15)
         title = res.json()['choices'][0]['message']['content'].strip()
         if title:
             with app.app_context():
@@ -295,12 +300,12 @@ def chat():
         return jsonify({"error": "Le système démarre, merci de patienter quelques secondes et de réessayer."}), 503
 
     user_id = int(get_jwt_identity())
-    data = request.get_json()
+    data    = request.get_json()
     if not data or 'message' not in data:
         return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
 
-    user_message = data['message']
-    conv_id = data.get('conversation_id')
+    user_message    = data['message']
+    conv_id         = data.get('conversation_id')
     stream_requested = data.get('stream', True)
 
     if conv_id:
@@ -309,7 +314,7 @@ def chat():
             return jsonify({"error": "Conversation introuvable"}), 404
     else:
         title = user_message[:60] + ("…" if len(user_message) > 60 else "")
-        conv = Conversation(user_id=user_id, title=title)
+        conv  = Conversation(user_id=user_id, title=title)
         db.session.add(conv)
         db.session.commit()
 
@@ -317,7 +322,7 @@ def chat():
     db.session.commit()
 
     raw_history = [{"role": m.role, "content": m.content} for m in conv.messages[:-1]]
-    history = raw_history[-MAX_HISTORY:]
+    history     = raw_history[-MAX_HISTORY:]
 
     with _rag_lock:
         vs = vector_store
@@ -325,7 +330,7 @@ def chat():
     context = ""
 
     if vs:
-        results = vs.similarity_search_with_score(user_message, k=10)
+        results  = vs.similarity_search_with_score(user_message, k=10)
         relevant = [doc for doc, score in results if score < 2.0]
 
         if _is_off_topic(user_message):
@@ -337,7 +342,6 @@ def chat():
                     full_text = _load_full_pdf(filename)
                     if full_text:
                         full_context += f"\n\n--- Document : {filename} ---\n{full_text}"
-
             if full_context:
                 context = "Voici les informations complètes des documents officiels :\n\n" + full_context
             else:
@@ -355,12 +359,12 @@ def chat():
             *history,
             {"role": "user", "content": user_message},
         ],
-        "stream": stream_requested,
+        "stream":      stream_requested,
         "temperature": 0.2,
-        "max_tokens": 1200,
+        "max_tokens":  1200,
     }
 
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    url     = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
 
     try:
@@ -370,20 +374,18 @@ def chat():
             return jsonify({"error": f"Groq error {resp.status_code}"}), resp.status_code
 
         if not stream_requested:
-            answer = resp.json()['choices'][0]['message']['content']
-            
+            answer    = resp.json()['choices'][0]['message']['content']
             low_answer = answer.lower()
-            if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or 
-                "secrétariat" in low_answer or "délégué" in low_answer):
+            if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or
+                    "secrétariat" in low_answer or "délégué" in low_answer):
                 _send_unanswered_question(user_message, user_id)
-
             with app.app_context():
                 db.session.add(Message(conversation_id=conv.id, role='assistant', content=answer))
                 db.session.execute(db.update(Conversation).where(Conversation.id == conv.id).values(updated_at=datetime.utcnow()))
                 db.session.commit()
             return jsonify({"response": answer, "conversation_id": conv.id})
 
-        assistant_buffer = []
+        assistant_buffer  = []
         is_first_exchange = len(conv.messages) <= 2
 
         def generate():
@@ -400,10 +402,9 @@ def chat():
 
                 if payload_str == '[DONE]':
                     full_answer = ''.join(assistant_buffer)
-                    
-                    low_answer = full_answer.lower()
-                    if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or 
-                        "secrétariat" in low_answer or "délégué" in low_answer):
+                    low_answer  = full_answer.lower()
+                    if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or
+                            "secrétariat" in low_answer or "délégué" in low_answer):
                         _send_unanswered_question(user_message, user_id)
 
                     with app.app_context():
@@ -419,7 +420,7 @@ def chat():
 
                 try:
                     parsed = json.loads(payload_str)
-                    delta = parsed['choices'][0]['delta'].get('content', '')
+                    delta  = parsed['choices'][0]['delta'].get('content', '')
                     if delta:
                         assistant_buffer.append(delta)
                 except Exception:

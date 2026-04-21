@@ -14,6 +14,8 @@ class ChatSidebar extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onRefresh;
   final String username;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
 
   const ChatSidebar({
     super.key,
@@ -26,6 +28,8 @@ class ChatSidebar extends StatefulWidget {
     required this.onClose,
     required this.onRefresh,
     required this.username,
+    required this.hasMore,
+    required this.onLoadMore,
   });
 
   @override
@@ -34,12 +38,27 @@ class ChatSidebar extends StatefulWidget {
 
 class _ChatSidebarState extends State<ChatSidebar> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 100) {
+      if (widget.hasMore) widget.onLoadMore();
+    }
   }
 
   String get _initiale =>
@@ -153,234 +172,257 @@ class _ChatSidebarState extends State<ChatSidebar> {
 
     return Material(
       elevation: 4,
-      child: Container(
-        width: 260,
-        color: Colors.white,
-        child: Column(
-          children: [
-            Container(
-              height: 55,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: widget.onClose,
+      child: SafeArea(
+        child: Container(
+          width: 260,
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                height: 55,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade300),
                   ),
-                  const Spacer(),
-                  const Text(
-                    "Conversations",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              child: ElevatedButton(
-                onPressed: widget.onNewChat,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 45),
                 ),
-                child: const Text("Nouvelle conversation"),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _searchQuery = v.trim()),
-                decoration: InputDecoration(
-                  hintText: "Rechercher…",
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade400,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    size: 18,
-                    color: Colors.grey.shade400,
-                  ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            size: 16,
-                            color: Colors.grey.shade400,
-                          ),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                      color: Colors.blue.shade300,
-                      width: 1.5,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: widget.onClose,
                     ),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
+                    const Spacer(),
+                    const Text(
+                      "Conversations",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                  ],
                 ),
               ),
-            ),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        _searchQuery.isEmpty
-                            ? "Aucune conversation"
-                            : "Aucun résultat",
-                        style: TextStyle(color: Colors.grey.shade500),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final conv = filtered[index];
-                        final isSelected = conv.id == widget.selectedConvId;
 
-                        final title = conv.title;
-                        final qLower = _searchQuery.toLowerCase();
-                        final matchIndex = _searchQuery.isEmpty
-                            ? -1
-                            : title.toLowerCase().indexOf(qLower);
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                child: ElevatedButton(
+                  onPressed: widget.onNewChat,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 45),
+                  ),
+                  child: const Text("Nouvelle conversation"),
+                ),
+              ),
 
-                        return ListTile(
-                          selected: isSelected,
-                          selectedTileColor: Colors.blue.shade50,
-                          title: matchIndex >= 0
-                              ? RichText(
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  text: TextSpan(
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.black87,
-                                    ),
-                                    children: [
-                                      TextSpan(
-                                        text: title.substring(0, matchIndex),
-                                      ),
-                                      TextSpan(
-                                        text: title.substring(
-                                          matchIndex,
-                                          matchIndex + _searchQuery.length,
-                                        ),
-                                        style: TextStyle(
-                                          backgroundColor:
-                                              Colors.yellow.shade200,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: title.substring(
-                                          matchIndex + _searchQuery.length,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                          onTap: () => widget.onSelect(conv),
-                          onLongPress: () => _showRenameDialog(conv),
-                          trailing: IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              size: 18,
-                              color: Colors.grey,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                  decoration: InputDecoration(
+                    hintText: "Rechercher…",
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      size: 18,
+                      color: Colors.grey.shade400,
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.grey.shade400,
                             ),
-                            onPressed: () => _confirmDelete(conv),
-                          ),
-                        );
-                      },
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
-            ),
-
-            const Divider(height: 1),
-            ListTile(
-              leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: _avatarColor(),
-                child: Text(
-                  _initiale,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              title: Text(
-                widget.username,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: const Text(
-                "Mon compte",
-                style: TextStyle(fontSize: 12),
-              ),
-              onTap: () async {
-                widget.onClose();
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccountPage()),
-                );
-                if (result == 'refresh') {
-                  widget.onNewChat();
-                  widget.onRefresh();
-                }
-              },
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 45,
-                child: OutlinedButton.icon(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout, color: Colors.red, size: 18),
-                  label: const Text(
-                    "Se déconnecter",
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                    shape: RoundedRectangleBorder(
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: Colors.blue.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searchQuery.isEmpty
+                              ? "Aucune conversation"
+                              : "Aucun résultat",
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount:
+                            filtered.length +
+                            (widget.hasMore && _searchQuery.isEmpty ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == filtered.length) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final conv = filtered[index];
+                          final isSelected = conv.id == widget.selectedConvId;
+                          final title = conv.title;
+                          final qLower = _searchQuery.toLowerCase();
+                          final matchIndex = _searchQuery.isEmpty
+                              ? -1
+                              : title.toLowerCase().indexOf(qLower);
+
+                          return ListTile(
+                            selected: isSelected,
+                            selectedTileColor: Colors.blue.shade50,
+                            title: matchIndex >= 0
+                                ? RichText(
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black87,
+                                      ),
+                                      children: [
+                                        TextSpan(
+                                          text: title.substring(0, matchIndex),
+                                        ),
+                                        TextSpan(
+                                          text: title.substring(
+                                            matchIndex,
+                                            matchIndex + _searchQuery.length,
+                                          ),
+                                          style: TextStyle(
+                                            backgroundColor:
+                                                Colors.yellow.shade200,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: title.substring(
+                                            matchIndex + _searchQuery.length,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                            onTap: () => widget.onSelect(conv),
+                            onLongPress: () => _showRenameDialog(conv),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () => _confirmDelete(conv),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+
+              const Divider(height: 1),
+              ListTile(
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: _avatarColor(),
+                  child: Text(
+                    _initiale,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  widget.username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: const Text(
+                  "Mon compte",
+                  style: TextStyle(fontSize: 12),
+                ),
+                onTap: () async {
+                  widget.onClose();
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AccountPage()),
+                  );
+                  if (result == 'refresh') {
+                    widget.onNewChat();
+                    widget.onRefresh();
+                  }
+                },
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: OutlinedButton.icon(
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout, color: Colors.red, size: 18),
+                    label: const Text(
+                      "Se déconnecter",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

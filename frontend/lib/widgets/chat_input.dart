@@ -58,7 +58,7 @@ class ChatInput extends StatelessWidget {
                       maxLines: 5,
                       decoration: InputDecoration(
                         hintText: isReady
-                            ? "Envoyer un message à Studease…"
+                            ? "Demander à Studease"
                             : "Démarrage du système…",
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
