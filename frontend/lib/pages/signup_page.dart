@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import '../config/app_config.dart';
+import '../config/app_messages.dart';
+import '../services/auth_service.dart';
 import '../widgets/name_field.dart';
 import '../widgets/email_field.dart';
 import '../widgets/password_field.dart';
@@ -37,24 +39,24 @@ class _SignupPageState extends State<SignupPage> {
   static final _emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
 
   String? _validateName(String v) =>
-      v.trim().isEmpty ? "Le nom d'utilisateur est requis" : null;
+      v.trim().isEmpty ? AppMessages.registerNameRequired : null;
 
   String? _validateEmail(String v) {
-    if (v.trim().isEmpty) return "L'email est requis";
-    if (!_emailRegex.hasMatch(v.trim())) return "Adresse email invalide";
+    if (v.trim().isEmpty) return AppMessages.loginEmailRequired;
+    if (!_emailRegex.hasMatch(v.trim())) return AppMessages.loginEmailInvalid;
     return null;
   }
 
   String? _validatePassword(String v) {
-    if (v.isEmpty) return "Le mot de passe est requis";
-    if (v.length < 6) return "Au moins 6 caractères";
+    if (v.isEmpty) return AppMessages.loginPasswordRequired;
+    if (v.length < 6) return AppMessages.loginPasswordTooShort;
     return null;
   }
 
   String? _validateConfirm(String v) {
-    if (v.isEmpty) return "Veuillez confirmer le mot de passe";
+    if (v.isEmpty) return "Veuillez confirmer le mot de passe.";
     if (v != passwordController.text)
-      return "Les mots de passe ne correspondent pas";
+      return AppMessages.registerPasswordMismatch;
     return null;
   }
 
@@ -67,7 +69,6 @@ class _SignupPageState extends State<SignupPage> {
   @override
   void initState() {
     super.initState();
-
     _videoController =
         VideoPlayerController.asset("assets/animations/animated_logo.mp4")
           ..initialize().then((_) {
@@ -108,6 +109,15 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green,
+      ),
+    );
+  }
+
   Future<void> _signup() async {
     setState(() {
       _nameError = _validateName(nameController.text);
@@ -124,7 +134,7 @@ class _SignupPageState extends State<SignupPage> {
     try {
       final response = await http.post(
         Uri.parse(AppConfig.registerUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: await AuthService.baseHeaders(),
         body: jsonEncode({
           'name': nameController.text.trim(),
           'email': emailController.text.trim().toLowerCase(),
@@ -132,36 +142,19 @@ class _SignupPageState extends State<SignupPage> {
         }),
       );
 
-      final body = jsonDecode(response.body);
-
       if (response.statusCode == 201) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Compte créé avec succès !'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSnackBar(AppMessages.registerSuccess, isError: false);
         Navigator.pop(context);
       } else if (response.statusCode == 409) {
-        setState(() => _emailError = "Cette adresse email est déjà utilisée");
+        setState(() => _emailError = AppMessages.registerEmailTaken);
       } else {
-        final msg = body['error'] ?? 'Une erreur est survenue';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
+        _showSnackBar(AppMessages.registerServerError);
       }
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible de joindre le serveur — vérifie l\'URL dans app_config.dart',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar(AppMessages.fromException(e));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -188,7 +181,6 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                 ),
-
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(30),
@@ -216,19 +208,16 @@ class _SignupPageState extends State<SignupPage> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 25),
-
                     NameField(
                       controller: nameController,
                       errorText: _nameError,
                     ),
                     const SizedBox(height: 16),
-
                     EmailField(
                       controller: emailController,
                       errorText: _emailError,
                     ),
                     const SizedBox(height: 16),
-
                     PasswordField(
                       controller: passwordController,
                       obscureText: obscurePassword,
@@ -237,7 +226,6 @@ class _SignupPageState extends State<SignupPage> {
                       errorText: _passwordError,
                     ),
                     const SizedBox(height: 16),
-
                     ConfirmPasswordField(
                       controller: confirmPasswordController,
                       obscureText: obscureConfirm,
@@ -246,7 +234,6 @@ class _SignupPageState extends State<SignupPage> {
                       errorText: _confirmError,
                     ),
                     const SizedBox(height: 24),
-
                     isLoading
                         ? const SizedBox(
                             height: 45,
@@ -258,7 +245,6 @@ class _SignupPageState extends State<SignupPage> {
                               onPressed: isFormValid ? _signup : null,
                             ),
                           ),
-
                     const SizedBox(height: 20),
                     Row(
                       children: const [
@@ -271,10 +257,8 @@ class _SignupPageState extends State<SignupPage> {
                       ],
                     ),
                     const SizedBox(height: 20),
-
                     GoogleLoginButton(onPressed: () {}),
                     const SizedBox(height: 24),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -294,7 +278,6 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
               const Text(
                 "© 2026 Studease",
