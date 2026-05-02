@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, jsonify, g
+from flask import Flask, request, Response, jsonify
 from flasgger import Swagger
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, verify_jwt_in_request
@@ -111,6 +111,15 @@ MAX_HISTORY = 10
 vector_store = None
 _rag_ready   = False
 _rag_lock    = threading.Lock()
+_embeddings  = None
+
+groq_session = requests.Session()
+groq_session.headers.update({
+    "Authorization": f"Bearer {GROQ_API_KEY}",
+    "Content-Type": "application/json",
+})
+
+_pdf_cache = {}
 
 
 def _get_pdf_signatures() -> dict:
@@ -141,13 +150,17 @@ def _save_meta():
 
 
 def _load_full_pdf(filename):
+    if filename in _pdf_cache:
+        return _pdf_cache[filename]
     path = os.path.join(PDF_FOLDER, filename)
     if not os.path.exists(path):
         return ""
     try:
         reader = PdfReader(path)
         text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
-        return text[:15000]
+        result = text[:15000]
+        _pdf_cache[filename] = result
+        return result
     except:
         return ""
 
@@ -180,11 +193,11 @@ Date : {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 
 def _load_rag_background():
-    global vector_store, _rag_ready
-    embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
+    global vector_store, _rag_ready, _embeddings
+    _embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
     try:
         if not _index_is_stale():
-            vs = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+            vs = FAISS.load_local(INDEX_PATH, _embeddings, allow_dangerous_deserialization=True)
             print("[RAG] Index chargé depuis le cache ✓")
         else:
             print("[RAG] Reconstruction de l'index…")
@@ -220,10 +233,19 @@ def _load_rag_background():
 
             if docs:
                 os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
-                vs = FAISS.from_documents(docs, embeddings)
+                vs = FAISS.from_documents(docs, _embeddings)
                 vs.save_local(INDEX_PATH)
                 _save_meta()
                 print(f"[RAG] Index reconstruit avec {len(docs)} chunks ✓")
+
+        vs.similarity_search("préinscription frais universitaires", k=1)
+        print("[RAG] Warm-up FAISS ✓")
+
+        if os.path.exists(PDF_FOLDER):
+            for filename in os.listdir(PDF_FOLDER):
+                if filename.lower().endswith(".pdf"):
+                    _load_full_pdf(filename)
+            print(f"[RAG] Cache PDF chargé ({len(_pdf_cache)} fichiers) ✓")
 
         with _rag_lock:
             vector_store = vs
@@ -257,12 +279,11 @@ def _generate_title(conv_id: int, user_message: str, assistant_message: str):
             "temperature": 0.3,
             "max_tokens": 20,
         }
-        url     = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        res   = requests.post(url, json=payload, headers=headers, timeout=15)
+        res   = groq_session.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            timeout=15,
+        )
         title = res.json()['choices'][0]['message']['content'].strip()
         if title:
             with app.app_context():
@@ -328,7 +349,7 @@ def chat():
         results  = vs.similarity_search_with_score(user_message, k=10)
         relevant = [doc for doc, score in results if score < 2.0]
 
-        if len(relevant) < 3:
+        if len(relevant) < 5:
             full_context = ""
             for filename in os.listdir(PDF_FOLDER):
                 if filename.lower().endswith(".pdf"):
@@ -357,11 +378,13 @@ def chat():
         "max_tokens":  1200,
     }
 
-    url     = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-
     try:
-        resp = requests.post(url, json=payload, headers=headers, stream=stream_requested, timeout=90)
+        resp = groq_session.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            stream=stream_requested,
+            timeout=90,
+        )
 
         if resp.status_code != 200:
             return jsonify({"error": f"Groq error {resp.status_code}"}), resp.status_code
