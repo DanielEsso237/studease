@@ -88,11 +88,19 @@ Tu accompagnes chaleureusement les étudiants, enseignants et le personnel admin
 
 Tu as une personnalité amicale, patiente et encourageante.
 
-RÈGLES QUE TU RESPECTES ABSOLUMENT ET SANS EXCEPTION :
+RÈGLES ABSOLUES :
 
-1. Si la question ne concerne pas la Faculté des Sciences de l'Université d'Ebolowa, tu réponds poliment que tu ne peux pas aider sur ce sujet.
-2. Si la question concerne la fac mais que tu n'as pas l'information, tu dis honnêtement que tu n'as pas encore cette information et tu conseilles de se rapprocher du secrétariat ou du délégué de classe.
-3. Tu réponds toujours en français, de façon naturelle et chaleureuse."""
+1. Tu dois d'abord évaluer si la question est en lien avec la Faculté des Sciences de l'Université d'Ebolowa, ses étudiants, ses cours, ses procédures administratives, sa vie campus, ses équipes sportives ou culturelles, ou l'université d'Ebolowa en général.
+
+2. Si la question n'a aucun lien avec la faculté ou l'université (par exemple : actualités mondiales, recettes de cuisine, résultats sportifs nationaux ou internationaux, météo, politique nationale ou internationale, célébrités, etc.), tu réponds uniquement ceci, sans rien ajouter : "Je suis Studease, l'assistant de la Faculté des Sciences de l'Université d'Ebolowa. Je ne peux répondre qu'aux questions concernant notre faculté. N'hésite pas à me poser une question sur les cours, les inscriptions, la vie campus ou les procédures administratives !"
+
+3. Si la question concerne la faculté mais que tu n'as pas l'information dans les documents fournis, tu réponds honnêtement que tu ne dispose pas encore de cette information et tu conseilles de contacter le secrétariat ou le délégué de classe. Ne jamais inventer une réponse.
+
+4. Une question peut mentionner un mot qui semble hors-sujet mais être tout à fait légitime. Exemples : "Comment intégrer l'équipe de football de la fac ?" ou "Y a-t-il un club de musique à la faculté ?" sont des questions valides sur la vie étudiante. Tu dois analyser l'intention globale de la question, pas se fier à des mots isolés.
+
+5. Tu réponds toujours en français, de façon naturelle et chaleureuse.
+
+6. Tu ne te contredis jamais : si tu peux aider, aide directement sans dire "malheureusement". Si tu ne peux pas, dis-le clairement et simplement."""
 
 PDF_FOLDER = os.path.join(os.path.dirname(__file__), "pdfs")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "rag", "index.faiss")
@@ -142,19 +150,6 @@ def _load_full_pdf(filename):
         return text[:15000]
     except:
         return ""
-
-
-def _is_off_topic(user_message: str) -> bool:
-    off_topic_keywords = ["coupe du monde", "météo", "recette", "football", "musique", "film", "politique", "temps", "comment faire", "qui a gagné", "omelette"]
-    msg_lower = user_message.lower()
-    return any(kw in msg_lower for kw in off_topic_keywords)
-
-
-def _should_use_fallback(user_message: str) -> bool:
-    keywords = ["transfert", "transféré", "l3", "l2", "dossier", "pièces", "composition",
-                "préinscription", "preinscription", "master", "licence 3", "licence 2", "credit", "crédit", "examen", "rattrapage"]
-    msg_lower = user_message.lower()
-    return any(kw in msg_lower for kw in keywords)
 
 
 def _send_unanswered_question(user_message: str, user_id: int):
@@ -304,8 +299,8 @@ def chat():
     if not data or 'message' not in data:
         return jsonify({"error": "Le champ 'message' est obligatoire"}), 400
 
-    user_message    = data['message']
-    conv_id         = data.get('conversation_id')
+    user_message     = data['message']
+    conv_id          = data.get('conversation_id')
     stream_requested = data.get('stream', True)
 
     if conv_id:
@@ -333,9 +328,7 @@ def chat():
         results  = vs.similarity_search_with_score(user_message, k=10)
         relevant = [doc for doc, score in results if score < 2.0]
 
-        if _is_off_topic(user_message):
-            context = "La question ne concerne pas la Faculté des Sciences de l'Université d'Ebolowa."
-        elif len(relevant) < 3 or _should_use_fallback(user_message):
+        if len(relevant) < 3:
             full_context = ""
             for filename in os.listdir(PDF_FOLDER):
                 if filename.lower().endswith(".pdf"):
@@ -374,7 +367,7 @@ def chat():
             return jsonify({"error": f"Groq error {resp.status_code}"}), resp.status_code
 
         if not stream_requested:
-            answer    = resp.json()['choices'][0]['message']['content']
+            answer     = resp.json()['choices'][0]['message']['content']
             low_answer = answer.lower()
             if ("je n'ai pas" in low_answer or "je ne peux pas" in low_answer or
                     "secrétariat" in low_answer or "délégué" in low_answer):
