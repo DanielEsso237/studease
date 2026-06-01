@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
+import 'package:lottie/lottie.dart';
 import '../config/app_config.dart';
 import '../config/app_messages.dart';
 import '../services/auth_service.dart';
@@ -20,7 +20,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  late VideoPlayerController _videoController;
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -50,30 +49,7 @@ class _LoginPageState extends State<LoginPage> {
       _validatePassword(passwordController.text) == null;
 
   @override
-  void initState() {
-    super.initState();
-    _videoController =
-        VideoPlayerController.asset("assets/animations/animated_logo.mp4")
-          ..initialize().then((_) {
-            if (mounted) setState(() {});
-          });
-    _videoController.setLooping(true);
-    _videoController.setVolume(0);
-    _videoController.play();
-
-    emailController.addListener(
-      () => setState(() => _emailError = _validateEmail(emailController.text)),
-    );
-    passwordController.addListener(
-      () => setState(
-        () => _passwordError = _validatePassword(passwordController.text),
-      ),
-    );
-  }
-
-  @override
   void dispose() {
-    _videoController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -170,17 +146,18 @@ class _LoginPageState extends State<LoginPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              if (_videoController.value.isInitialized)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: SizedBox(
-                    width: screenWidth * 0.7,
-                    child: AspectRatio(
-                      aspectRatio: _videoController.value.aspectRatio,
-                      child: VideoPlayer(_videoController),
-                    ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: SizedBox(
+                  width: screenWidth * 0.7,
+                  child: Lottie.asset(
+                    "assets/animations/animated_logo.json",
+                    repeat: true,
+                    fit: BoxFit.contain,
                   ),
                 ),
+              ),
+
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(30),
