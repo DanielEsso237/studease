@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
+import 'package:lottie/lottie.dart';
 import '../config/app_config.dart';
 import '../config/app_messages.dart';
 import '../services/auth_service.dart';
@@ -20,8 +20,6 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  late VideoPlayerController _videoController;
-
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -69,14 +67,6 @@ class _SignupPageState extends State<SignupPage> {
   @override
   void initState() {
     super.initState();
-    _videoController =
-        VideoPlayerController.asset("assets/animations/animated_logo.mp4")
-          ..initialize().then((_) {
-            if (mounted) setState(() {});
-          });
-    _videoController.setLooping(true);
-    _videoController.setVolume(0);
-    _videoController.play();
 
     nameController.addListener(
       () => setState(() => _nameError = _validateName(nameController.text)),
@@ -101,7 +91,6 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   void dispose() {
-    _videoController.dispose();
     nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
@@ -170,17 +159,18 @@ class _SignupPageState extends State<SignupPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              if (_videoController.value.isInitialized)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: SizedBox(
-                    width: screenWidth * 0.7,
-                    child: AspectRatio(
-                      aspectRatio: _videoController.value.aspectRatio,
-                      child: VideoPlayer(_videoController),
-                    ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: SizedBox(
+                  width: screenWidth * 0.7,
+                  child: Lottie.asset(
+                    "assets/animations/animated_logo.json",
+                    repeat: true,
+                    fit: BoxFit.contain,
                   ),
                 ),
+              ),
+
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(30),

@@ -18,16 +18,25 @@ dependencies:
   flutter_markdown_plus: ^1.0.0
   url_launcher: ^6.2.5
   google_sign_in: ^6.2.1
+  lottie: ^3.1.0
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.3
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/bot.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/images/bot.png"
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/
-    - assets/animations/
+    - assets/animations/animated_logo.json
