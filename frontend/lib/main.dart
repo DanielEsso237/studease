@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
 import 'pages/login_page.dart';
 import 'pages/chat_page.dart';
+import 'pages/onboarding_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final isLogged = await AuthService.isLoggedIn();
-  runApp(StudEaseApp(startOnChat: isLogged));
+  runApp(StudEaseApp(isLogged: isLogged));
 }
 
 class StudEaseApp extends StatefulWidget {
-  final bool startOnChat;
-  const StudEaseApp({super.key, required this.startOnChat});
+  final bool isLogged;
+  const StudEaseApp({super.key, required this.isLogged});
 
   static _StudEaseAppState? of(BuildContext context) =>
       context.findAncestorStateOfType<_StudEaseAppState>();
@@ -31,7 +32,8 @@ class _StudEaseAppState extends State<StudEaseApp> {
       themeMode: _themeMode,
       theme: ThemeData.light(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
-      home: widget.startOnChat ? const ChatPage() : const LoginPage(),
+      debugShowCheckedModeBanner: false,
+      home: const OnboardingPage(),
     );
   }
 }
